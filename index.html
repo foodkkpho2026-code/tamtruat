@@ -262,6 +262,15 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums;whi
 .unitkind{display:flex;gap:6px}
 .unitkind button{flex:1;min-height:44px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;font:inherit;cursor:pointer}
 .unitkind button[aria-checked="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.dlg-xbar{position:sticky;top:-12px;height:0;display:flex;justify-content:flex-end;z-index:3;margin:-8px -10px 0 0;align-self:stretch;width:auto}
+.dlg-x{width:40px;height:40px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:24px;line-height:1;cursor:pointer;display:grid;place-items:center;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.dlg-x:hover{background:var(--sunk)}
+.dialog > .dlg-xbar + *{padding-right:40px}
+.ins-row{display:flex;gap:8px;align-items:flex-start;border-radius:10px;padding:4px;transition:background .15s}
+.ins-row.dragging{opacity:.55;background:var(--sunk)}
+.ins-row.drop{background:var(--accent-soft);outline:2px dashed var(--accent)}
+.ins-handle{flex:none;width:40px;height:44px;margin-top:22px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--muted);font-size:20px;cursor:grab;touch-action:none;user-select:none}
+.ins-handle:active{cursor:grabbing}
 .pw-wrap{position:relative;display:flex}
 .pw-wrap input{flex:1;width:100%;padding-right:48px}
 .pw-eye{position:absolute;right:2px;top:50%;transform:translateY(-50%);width:44px;height:44px;display:grid;place-items:center;border:0;background:none;color:var(--muted);cursor:pointer;border-radius:8px}
@@ -308,7 +317,8 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums;whi
 .rpt .photos{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 .rpt .photos figure{margin:0;border:1px solid #BBBBBB;padding:4px}
 .rpt .photos img{width:100%;height:230px;object-fit:contain;background:#F5F5F5;display:block}
-.rpt .photos figcaption{font-size:11.5px;margin-top:3px}
+.rpt .photos figcaption{font-size:11.5px;margin-top:4px;line-height:1.4}
+.rpt .photos figcaption b{font-size:12px}
 .rpt .small{font-size:11.5px}
 .rpt .hdrline{display:flex;justify-content:space-between;font-size:11px;border-bottom:1px solid #000000;margin-bottom:6px;padding-bottom:2px}
 
@@ -624,6 +634,10 @@ function ts3Off(insp, k) {
   if (k.startsWith('2.') && !t.ice) return true;
   return false;
 }
+/* new licence (ยังไม่มีการผลิต): these ts2 items are not assessed; the operator certifies them in the statement (บันทึกคำให้การ) */
+const NEW_SKIP = ['2.8', '3.9.1', '3.12', '3.13', '5.1.1'];
+const isNewLic = insp => !!(insp && insp.kind !== 'fu' && insp.obj && insp.obj.g === 'lc' && insp.obj.lc && insp.obj.lc.new);
+function itemOff(insp, f, k) { return (f === 'ts3' && ts3Off(insp, k)) || (f === 'ts2' && isNewLic(insp) && NEW_SKIP.includes(k)); }
 function activeForms(insp) { const f = insp.forms || {}; return ['ts2', ...['ts3','ts4','ts5'].filter(x => f[x])]; }
 function itemVal(res, form, k) { return ((res && res[form]) || {})[kk(k)] || {}; }
 function calc(insp, res) {
@@ -632,6 +646,7 @@ function calc(insp, res) {
   for (const c of TS2) {
     let full = 0, got = 0, done = 0, n = 0;
     for (const it of c.rows.filter(x => x.k)) {
+      if (itemOff(insp, 'ts2', it.k)) continue;
       const v = itemVal(res, 'ts2', it.k); n++;
       if (v.s === 'na') { done++; continue; }
       if (v.s === 0 || v.s === 1 || v.s === 2) { done++; full += 2; got += v.s;
@@ -648,7 +663,7 @@ function calc(insp, res) {
     if (!(insp.forms && insp.forms[f])) continue;
     let fails = 0, done = 0, n = 0;
     for (const it of ITEMS[f]) {
-      if (f === 'ts3' && ts3Off(insp, it.k)) continue;
+      if (itemOff(insp, f, it.k)) continue;
       n++; const v = itemVal(res, f, it.k);
       if (v.s === 'p' || v.s === 'na') done++;
       else if (v.s === 'f') { done++; fails++; out.deficits.push({form:f, it, v}); }
@@ -729,7 +744,7 @@ async function loadAll() {
   try {
     const r = await API('bootstrap', {here: IN_GAS ? '' : location.origin + location.pathname});
     S.user = r.user; S.me = {id:r.user.username, name:r.user.name};
-    S.places = sortPlaces(r.places); S.insps = r.regs; S.sheetUrl = r.sheetUrl; S.appUrl = r.appUrl || ''; S.folderUrl = r.folderUrl; S.mailQuota = r.mailQuota;
+    S.places = sortPlaces(r.places); S.insps = r.regs; S.sheetUrl = r.sheetUrl; S.appUrl = r.appUrl || ''; S.folderUrl = r.folderUrl; S.mailQuota = r.mailQuota; S.office = r.office || '';
     const al = allowedAreas();
     if (r.user.guest) { S.area = 'ALL'; S.view = 'guest'; }
     else if (al.length === 1) S.area = al[0];
@@ -1030,9 +1045,9 @@ function render() {
   }
   nav.replaceChildren(
     h('button', {'aria-current': S.view === 'reg' ? 'page' : null, onclick: () => go('reg')}, 'ทะเบียนผลตรวจ'),
-    h('button', {'aria-current': ['places','place'].includes(S.view) ? 'page' : null, onclick: () => go('places')}, 'สถานที่'),
-    h('button', {'aria-current': S.view === 'plan' ? 'page' : null, onclick: () => go('plan')}, 'นัดตรวจ', planCount() ? h('span', {class:'navbadge'}, planCount()) : null),
-    h('button', {'aria-current': S.view === 'new' ? 'page' : null, onclick: () => go('new')}, '+ ตรวจใหม่'),
+    h('button', {'aria-current': ['places','place'].includes(S.view) ? 'page' : null, onclick: () => go('places')}, 'ฐานข้อมูลสถานที่'),
+    h('button', {'aria-current': S.view === 'plan' ? 'page' : null, onclick: () => go('plan')}, 'นัดตรวจล่วงหน้า', planCount() ? h('span', {class:'navbadge'}, planCount()) : null),
+    h('button', {'aria-current': S.view === 'new' ? 'page' : null, onclick: () => go('new')}, '+ตรวจใหม่'),
     isAdmin() ? h('button', {'aria-current': S.view === 'users' ? 'page' : null, onclick: () => go('users')}, 'ผู้ใช้งาน') : null,
     S.area ? h('button', {class:'area-pill', disabled: !multiArea(), onclick: () => { S.area = ''; render(); }, title: multiArea() ? 'เปลี่ยนพื้นที่' : 'พื้นที่ของบัญชีนี้'}, S.area === 'ALL' && S.user.areas !== 'ALL' ? 'ทุกพื้นที่ที่ดูแล' : areaName(S.area)) : null,
     h('button', {class:'acct', onclick:accountDialog, title:'บัญชีผู้ใช้'}, S.user.name || S.user.username));
@@ -1550,7 +1565,7 @@ function viewRecord() {
         h('p', {class:'small muted'}, 'PDF หรือรูปถ่ายของแบบตรวจที่ลงนามแล้ว แนบได้หลายไฟล์ ไฟล์จะถูกเก็บใน Google Drive ของ สสจ.'),
         st.files.length ? h('div', {class:'stack', style:'gap:6px'}, st.files.map((f, n) => h('div', {class:'row'},
           h('button', {class:'btn sm', onclick: () => openFile(f.id)}, 'เปิด: ' + f.name),
-          h('button', {class:'btn ghost sm', onclick: () => { st.files.splice(n, 1); draw(); }}, 'เอาออก')))) : null,
+          h('button', {class:'btn ghost sm', onclick: () => { st.files.splice(n, 1); draw(); }}, 'นำออก')))) : null,
         h('label', {class:'btn sm photo-add', style:'align-self:flex-start'}, st.uploading ? 'กำลังอัปโหลด ' + st.uploading + ' ไฟล์…' : '+ แนบไฟล์สแกน',
           h('input', {type:'file', accept:'application/pdf,image/*', multiple:true, onchange: async e => {
             const files = [...e.target.files]; st.uploading = files.length; draw();
@@ -1641,7 +1656,7 @@ function leaveEditor() {
   if (S.cur && S.cur.loaded) API('ver', {id:S.cur.id, tab:null}).catch(() => {});
   if (Q.pending.length) flushAll().catch(() => {});
 }
-const TAB_LABEL = {info:'ข้อมูลการตรวจ', fu:'ผลการแก้ไข', ts2:'ตส.2', ts3:'ตส.3', ts4:'ตส.4', ts5:'ตส.5', sum:'สรุปผล', sign:'ลงนาม'};
+const TAB_LABEL = {stm:'คำรับรอง (รายใหม่)', info:'ข้อมูลการตรวจ', fu:'ผลการแก้ไข', ts2:'ตส.2', ts3:'ตส.3', ts4:'ตส.4', ts5:'ตส.5', sum:'สรุปผล', sign:'ลงนาม'};
 function initialOf(name) { const n = String(name || '').replace(/^(นางสาว|น\.ส\.|นาง|นาย|ดร\.)\s*/, ''); const m = n.match(/[ก-ฮA-Za-z0-9]/); return m ? m[0].toUpperCase() : '?'; }
 function avatar(p, cls) {
   let hsh = 0; for (const ch of String(p.u)) hsh = (hsh * 31 + ch.charCodeAt(0)) % 360;
@@ -1727,9 +1742,10 @@ function tabsDef() {
   const c = calc(i, S.cur.res);
   const t = [{id:'info', label:'ข้อมูลการตรวจ', sub:'ตส.1 ข้อ 1–3'}];
   const n2 = c.cats.reduce((a, x) => a + x.done, 0);
-  t.push({id:'ts2', label:'ตส.2', sub:n2 + '/60 ข้อ'});
+  t.push({id:'ts2', label:'ตส.2', sub:n2 + '/' + c.cats.reduce((a, x) => a + x.total, 0) + ' ข้อ'});
   for (const f of ['ts3','ts4','ts5']) if (i.forms && i.forms[f]) { const s = c.spec[f]; t.push({id:f, label:SPEC[f].short, sub:s.done + '/' + s.n + ' ข้อ'}); }
   t.push({id:'sum', label:'สรุปผล', sub:RES_LABEL[c.final] || ''});
+  if (isNewLic(i)) { const st = S.cur.res.stm || {}; t.push({id:'stm', label:'คำรับรอง (รายใหม่)', sub: st.ack && (S.cur.sig || {}).st ? 'ลงนามแล้ว' : 'ยังไม่ลงนาม'}); }
   t.push({id:'sign', label:'ลงนามและส่ง', sub: i.status === 'done' ? 'เสร็จสิ้น' : 'ยังไม่ลงนาม'});
   return t;
 }
@@ -1775,7 +1791,7 @@ function headNotes() {
         h('button', {class:'btn sm danger', onclick:cancelPlanned}, 'ยกเลิกนัด'))));
   }
   if (i.status !== 'done' && i.amendOpen) out.push(h('div', {class:'note warn small'}, h('b', null, 'กำลังแก้ไขบันทึก (ฉบับที่ ' + ed + ') '),
-    '· เหตุผล: ' + i.amendOpen.reason + ' · โดย ' + i.amendOpen.by + ' ' + fmtDT(i.amendOpen.at) + ' · ผู้ตรวจทุกคนต้องลงนามใหม่ก่อนปิดการตรวจ ฉบับเดิมเก็บไว้ในประวัติด้านล่าง'));
+    '· เหตุผล: ' + i.amendOpen.reason + ' · โดย ' + i.amendOpen.by + ' ' + fmtDT(i.amendOpen.at) + ' · แก้ไขแล้วให้ผู้แก้ไขลงนามที่แท็บ "ลงนาม" ก่อนปิดการตรวจ ฉบับเดิมเก็บไว้ในประวัติด้านล่าง'));
   if (i.status === 'done') {
     const fus = (i.followups || []).filter(f => f.status !== 'cancelled'), open = fus.find(f => f.status !== 'done');
     const canFu = !isGuest() && !isFu() && (i.final || i.result) === 'fail' && !open && fus.length < 2;
@@ -1824,7 +1840,7 @@ function drawTabs() {
 }
 function redrawTab() {
   const b = $('#tabBody'); if (!b || !S.cur) return;
-  const T = {info: isFu() ? tabFuInfo : tabInfo, fu:tabFuItems, ts2:tabTs2, ts3:() => tabSpec('ts3'), ts4:() => tabSpec('ts4'), ts5:() => tabSpec('ts5'), sum:tabSum, sign:tabSign};
+  const T = {info: isFu() ? tabFuInfo : tabInfo, fu:tabFuItems, ts2:tabTs2, ts3:() => tabSpec('ts3'), ts4:() => tabSpec('ts4'), ts5:() => tabSpec('ts5'), sum:tabSum, stm:tabStm, sign:tabSign};
   const body = (T[S.tab] || tabInfo)();
   if (S.tab === 'sign') b.replaceChildren(body);
   else { const fs = h('fieldset', {id:'edFs', disabled: locked()}, body); b.replaceChildren(fs); }
@@ -1838,21 +1854,20 @@ function syncEditor() {
   for (const el of document.querySelectorAll('.item[data-f]')) syncItem(el);
   for (const el of document.querySelectorAll('.item[data-fu]')) syncFuItem(el);
   refreshCalc();
+  { const ag = $('#eAgencyAuto'); if (ag && S.cur) ag.textContent = agencyOf(S.cur.insp) || 'ยังไม่มีชื่อผู้ตรวจ'; }
   if (S.tab === 'info') { const t = $('#ts3types'); if (t) t.hidden = !(S.cur.insp.forms && S.cur.insp.forms.ts3); }
 }
 function amendDialog() {
   if (!S.cur) return; const i = S.cur.insp, ed = i.edition || 1;
   const err = h('p', {class:'small', style:'color:var(--bad)'});
   const reason = h('textarea', {id:'amReason', rows:3, placeholder:'เช่น แก้คะแนนข้อ 3.4 ที่บันทึกผิด / เพิ่มรูปประกอบ / แก้ชื่อผู้ประกอบการ'});
-  const clearOp = h('input', {type:'checkbox', id:'amOp'});
   const ok = h('button', {class:'btn primary'}, 'เก็บฉบับเดิมและเปิดแก้ไข');
   const close = () => sc.remove();
   const sc = h('div', {class:'scrim', onclick: e => { if (e.target === sc) close(); }},
     h('div', {class:'dialog stack', role:'dialog', 'aria-modal':'true'},
       h('h2', null, 'ขอแก้ไขบันทึก'),
-      h('p', {class:'small muted'}, 'ระบบจะเก็บฉบับปัจจุบัน (ฉบับที่ ' + ed + ') พร้อม PDF ที่มีลายมือชื่อไว้เป็นประวัติ แล้วเปิดให้แก้ไขเป็นฉบับที่ ' + (ed + 1) + ' ผู้ตรวจทุกคนต้องลงนามใหม่ก่อนปิดการตรวจอีกครั้ง'),
+      h('p', {class:'small muted'}, 'ระบบจะเก็บฉบับปัจจุบัน (ฉบับที่ ' + ed + ') พร้อม PDF ที่มีลายมือชื่อไว้เป็นประวัติ แล้วเปิดให้แก้ไขเป็นฉบับที่ ' + (ed + 1) + ' ผู้ตรวจและผู้ประกอบการไม่ต้องลงนามใหม่ แต่ผู้แก้ไขต้องลงนามรับรองการแก้ไขในแท็บ "ลงนาม" ก่อนปิดการตรวจอีกครั้ง เหตุผลและวันที่แก้ไขจะแสดงใน PDF'),
       field('เหตุผลการแก้ไข (จำเป็น)', reason),
-      h('label', {class:'check'}, clearOp, h('span', null, 'ให้ผู้ประกอบการลงนามใหม่ด้วย (กรณีแก้ไขสาระสำคัญที่ต้องแจ้งผู้ประกอบการ)')),
       err, h('div', {class:'row', style:'justify-content:flex-end'}, h('button', {class:'btn', onclick:close}, 'ยกเลิก'), ok)));
   ok.onclick = async () => {
     const r = reason.value.trim(); if (r.length < 5) { err.textContent = 'ระบุเหตุผลการแก้ไข'; reason.focus(); return; }
@@ -1860,7 +1875,7 @@ function amendDialog() {
     try {
       const made = await makePdf(ok, {download:false}); if (!made) throw new Error('สร้าง PDF ฉบับเดิมไม่สำเร็จ');
       ok.disabled = true; ok.textContent = 'กำลังบันทึก…';
-      const res = await API('amend', {id:S.cur.id, reason:r, clearOp:clearOp.checked});
+      const res = await API('amend', {id:S.cur.id, reason:r});
       close(); S.cur.version = res.version; applyRemote(res.doc); redrawTab();
     } catch (e) { err.textContent = errText(e); ok.disabled = false; ok.textContent = 'เก็บฉบับเดิมและเปิดแก้ไข'; }
   };
@@ -1874,11 +1889,11 @@ async function cancelFollowup() {
 function startFollowupDialog() {
   const i = S.cur.insp, res = S.cur.res || {}, c = calc(i, res), fu = res.fu || {};
   const prevFixed = v => !!(v.f1 || v.f2);
-  const items = c.deficits.filter(d => !prevFixed(d.v)).map(d => ({form:d.form, k:d.it.k, t:d.it.t, m:!!d.it.m, s0:d.v.s, c0:d.v.c || '', r0:d.v.r || d.it.rec || '', due0:d.v.due || '', ph0:d.v.ph || []}));
+  const items = c.deficits.filter(d => !prevFixed(d.v)).map(d => ({form:d.form, k:d.it.k, t:d.it.t, m:!!d.it.m, s0:d.v.s, c0:d.v.c || '', r0:d.v.r || '', due0:d.v.due || '', ph0:d.v.ph || []}));
   const o9 = String((res.sum && res.sum.other9) || '').trim();
   if (o9 && !(fu.f1 && fu.f1.fixed9)) items.push({form:'sum', k:'9', t:o9, m:true, s0:'serious', c0:'', r0:'', due0:'', ph0:[]});
   const base = {};
-  for (const f of activeForms(i)) { base[f] = {}; for (const it of ITEMS[f]) { if (f === 'ts3' && ts3Off(i, it.k)) continue; const v = itemVal(res, f, it.k); if (v.s == null) continue; base[f][kk(it.k)] = prevFixed(v) ? (f === 'ts2' ? 2 : 'p') : v.s; } }
+  for (const f of activeForms(i)) { base[f] = {}; for (const it of ITEMS[f]) { if (itemOff(i, f, it.k)) continue; const v = itemVal(res, f, it.k); if (v.s == null) continue; base[f][kk(it.k)] = prevFixed(v) ? (f === 'ts2' ? 2 : 'p') : v.s; } }
   const round = (i.followups || []).filter(f => f.status === 'done').length + 1;
   const dateIn = h('input', {type:'date', id:'fuDate', value:todayISO()});
   const mode = h('div', {class:'stack', style:'gap:6px'},
@@ -1934,19 +1949,44 @@ function insEditor(i) {
   const nShown = Math.max(6, ...Object.keys(i.ins || {}).filter(k => (i.ins[k].name || '').trim()).map(Number));
   const clearIns = async k => {
     const x = (S.cur.insp.ins || {})[k] || {}; if (!String(x.name || '').trim()) return;
-    if (!await confirmBox('เอา ' + x.name + ' ออกจากรายชื่อผู้ตรวจ?', 'ลายมือชื่อของคนนี้ (ถ้ามี) จะถูกลบด้วย', 'เอาออก', true)) return;
+    if (!await confirmBox('นำ ' + x.name + ' ออกจากรายชื่อผู้ตรวจ?', 'ลายมือชื่อของคนนี้ (ถ้ามี) จะถูกลบด้วย', 'นำออก', true)) return;
     for (const f of ['name','pos','org','user']) write('insp', 'ins.' + k + '.' + f, '', 50);
     if ((S.cur.sig || {})['i' + k]) write('sig', 'i' + k, null, 50);
-    syncBound(insRows); toast('เอาออกจากรายชื่อผู้ตรวจแล้ว');
+    syncBound(insRows); toast('นำออกจากรายชื่อผู้ตรวจแล้ว');
   };
-  const drawIns = (n) => { insRows.replaceChildren(...Array.from({length:n}, (_, x) => h('div', {class:'grid2'},
+  // move inspector `from` to position `to` (1-based); signatures move with their owner
+  const moveIns = (from, to, n) => {
+    if (locked() || from === to) return;
+    const ins = S.cur.insp.ins || {}, sig = S.cur.sig || {};
+    const rows = Array.from({length:n}, (_, x) => ({d:ins[String(x + 1)] || null, s:sig['i' + (x + 1)] || null}));
+    const [m] = rows.splice(from - 1, 1); rows.splice(to - 1, 0, m);
+    const nIns = {}; rows.forEach((r, x) => { if (r.d && String(r.d.name || '').trim()) nIns[String(x + 1)] = r.d; });
+    write('insp', 'ins', nIns, 50);
+    rows.forEach((r, x) => { const k = 'i' + (x + 1); if ((sig[k] || null) !== r.s) write('sig', k, r.s, 50); });
+    drawIns(n); syncBound(insRows); drawLobby && drawLobby();
+  };
+  const dragStart = (e, x, n) => {
+    if (locked()) return; e.preventDefault();
+    const row = e.currentTarget.closest('.ins-row'); row.classList.add('dragging');
+    let to = x + 1;
+    const move = ev => { const el = document.elementFromPoint(ev.clientX, ev.clientY); const r = el && el.closest && el.closest('.ins-row');
+      for (const o of insRows.querySelectorAll('.ins-row')) o.classList.toggle('drop', o === r && o !== row);
+      if (r) to = +r.dataset.pos; };
+    const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up);
+      for (const o of insRows.querySelectorAll('.ins-row')) o.classList.remove('drop', 'dragging'); moveIns(x + 1, to, n); };
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up);
+  };
+  const drawIns = (n) => { insRows.replaceChildren(...Array.from({length:n}, (_, x) => h('div', {class:'ins-row', 'data-pos':x + 1},
+    h('button', {type:'button', class:'ins-handle', title:'ลากเพื่อเลื่อนลำดับ', 'aria-label':'เลื่อนลำดับผู้ตรวจคนที่ ' + (x + 1), onpointerdown: e => dragStart(e, x, n),
+      onkeydown: e => { if (e.key === 'ArrowUp' && x > 0) { e.preventDefault(); moveIns(x + 1, x, n); } if (e.key === 'ArrowDown' && x < n - 1) { e.preventDefault(); moveIns(x + 1, x + 2, n); } }}, '☰'),
+    h('div', {class:'grid2', style:'flex:1;min-width:0'},
     field('(' + (x + 1) + ') ชื่อ – สกุล', bound('text', 'insp', 'ins.' + (x + 1) + '.name', {id:'ins' + (x + 1) + 'n'})),
     field('ตำแหน่ง', bound('text', 'insp', 'ins.' + (x + 1) + '.pos', {id:'ins' + (x + 1) + 'p'})),
     h('div', {class:'row', style:'align-items:flex-end;gap:6px;flex-wrap:nowrap'},
       h('div', {style:'flex:1;min-width:0'}, field('หน่วยงาน', bound('text', 'insp', 'ins.' + (x + 1) + '.org', {id:'ins' + (x + 1) + 'o', list:'orgList'}))),
-      h('button', {class:'btn sm ghost danger', type:'button', title:'เอาออกจากรายชื่อผู้ตรวจ', 'aria-label':'เอาผู้ตรวจคนที่ ' + (x + 1) + ' ออก', onclick: () => clearIns(String(x + 1))}, 'เอาออก')))),
+      h('button', {class:'btn sm ghost danger', type:'button', title:'นำออกจากรายชื่อผู้ตรวจ', 'aria-label':'นำผู้ตรวจคนที่ ' + (x + 1) + ' ออก', onclick: () => clearIns(String(x + 1))}, 'นำออก'))))),
     n < 20 ? h('button', {class:'btn sm', style:'align-self:flex-start', type:'button', onclick: () => { drawIns(n + 1); const el = $('#ins' + (n + 1) + 'n'); if (el) el.focus(); }}, '+ เพิ่มผู้ตรวจคนที่ ' + (n + 1)) : null,
-    h('p', {class:'small muted'}, 'ผู้ตรวจทุกคนที่กรอกชื่อไว้ต้องลงนามในแท็บ "ลงนามและส่ง" ก่อนปิดการตรวจ')); };
+    h('p', {class:'small muted'}, 'ลาก ☰ หน้าชื่อเพื่อเลื่อนลำดับ (เช่น ให้ผู้ที่ตำแหน่งสูงกว่าอยู่ด้านบน) ลายมือชื่อที่ลงไว้จะย้ายตามคนนั้น · ผู้ตรวจทุกคนที่กรอกชื่อไว้ต้องลงนามในแท็บ "ลงนามและส่ง" ก่อนปิดการตรวจ')); };
   drawIns(Math.min(20, nShown));
   return insRows;
 }
@@ -1966,8 +2006,14 @@ function tabInfo() {
       h('div', {class:'eyebrow'}, '1.1 ชื่อ – สกุล'), insRows,
       h('div', {class:'eyebrow'}, '1.2 ตำแหน่ง/หน่วยงาน'),
       AUTH.map(([v, l]) => h('label', {class:'check'}, bound('radio', 'insp', 'auth', {name:'auth', value:v, id:'auth_' + v}), h('span', null, l))),
-      h('div', {class:'grid2'}, field('หน่วยงานต้นสังกัด / ชื่อหน่วยตรวจ', bound('text', 'insp', 'agency', {id:'eAgency', list:'orgList'})), field('เลขบัญชีหน่วยงาน / อื่น ๆ (ถ้ามี)', bound('text', 'insp', 'agencyNo', {id:'eAgencyNo'})))),
+      h('div', {class:'f'}, h('span', null, 'หน่วยงาน (ดึงจากหน่วยงานของผู้ตรวจในข้อ 1.1 อัตโนมัติ)'), h('div', {id:'eAgencyAuto', class:'note small', style:'margin:0'}, agencyOf(i) || 'ยังไม่มีชื่อผู้ตรวจ')),
+      field('เลขบัญชีหน่วยงาน / อื่น ๆ (ถ้ามี)', bound('text', 'insp', 'agencyNo', {id:'eAgencyNo'}))),
     contactPanel(i),
+    h('div', {class:'panel stack'}, h('h2', null, 'ผู้นำตรวจและให้ข้อมูล (ข้อ 5.1)'),
+      h('p', {class:'small muted'}, 'ผู้ที่นำตรวจและให้ข้อมูลขณะตรวจ (ไม่จำเป็นต้องเป็นผู้ดำเนินกิจการหรือผู้รับอนุญาต) ใช้ในข้อ 5.1 ของ ตส.1 และบันทึกคำให้การ (รายใหม่)'),
+      h('div', {class:'grid2'}, h('label', {class:'f'}, h('span', null, 'ชื่อ – สกุล ผู้นำตรวจ (เลือกจากรายชื่อ หรือพิมพ์ใหม่)'), bound('text', 'res', 'sum.guide', {id:'sG', list:'guideList', autocomplete:'off'}),
+          h('datalist', {id:'guideList'}, [...new Set([i.operator, i.licensee, S.cur.sig && S.cur.sig.opName].map(x => String(x || '').trim()).filter(Boolean))].map(n => h('option', {value:n})))), field('ตำแหน่ง/ฐานะ', bound('text', 'res', 'sum.guidePos', {id:'sGP', placeholder:'เช่น เจ้าของ ผู้จัดการ ผู้ควบคุมการผลิต'})))),
+
     h('div', {class:'panel stack'}, h('h2', null, '2. ข้อมูลสถานที่ผลิตที่ตรวจประเมิน'),
       h('div', {class:'grid2'},
         field('2.1 เลขที่ใบอนุญาต/เลขสถานที่ผลิต', bound('text', 'insp', 'lic', {id:'eLic'})),
@@ -2002,11 +2048,10 @@ function itemCard(form, it) {
   const base = form + '.' + kk(it.k);
   const opts = pf ? [['p','ผ่าน'],['f','ไม่ผ่าน'],['na','ไม่เกี่ยวข้อง']] : [[2,'ดี','2 คะแนน'],[1,'พอใช้','1 คะแนน'],[0,'ปรับปรุง','0 คะแนน'],['na','ไม่เกี่ยวข้อง','N/A']];
   const card = h('div', {class:'item', 'data-f':form, 'data-k':it.k, id:'it_' + form + '_' + kk(it.k)});
-  const commentWrap = h('div', {class:'cw', hidden:true}, field('ข้อคิดเห็น / สิ่งที่พบ', bound('textarea', 'res', base + '.c', {id:'c_' + form + kk(it.k), rows:2})));
+  const commentWrap = h('div', {class:'cw', hidden:true}, field('สิ่งที่พบ', bound('textarea', 'res', base + '.c', {id:'c_' + form + kk(it.k), rows:2, placeholder:'สิ่งที่พบขณะตรวจในข้อนี้'})));
   const recWrap = h('div', {class:'rec', hidden:true},
-    h('div', {class:'spread'}, h('span', null, 'คำแนะนำการแก้ไข (แนบท้ายผลการตรวจ)'),
-      h('button', {class:'btn ghost sm', type:'button', onclick: () => { write('res', base + '.r', it.rec, 150); syncItem(card); syncBound(card); }}, 'ใช้คำแนะนำมาตรฐาน')),
-    bound('textarea', 'res', base + '.r', {id:'r_' + form + kk(it.k), rows:3}),
+    h('label', {class:'f'}, h('span', null, 'คำแนะนำการแก้ไข (แนบท้ายผลการตรวจ)'),
+      bound('textarea', 'res', base + '.r', {id:'r_' + form + kk(it.k), rows:3, placeholder:'พิมพ์คำแนะนำให้ผู้ประกอบการ'})),
     h('label', {class:'f', style:'max-width:260px'}, h('span', null, 'กำหนดแก้ไขเร่งด่วนเฉพาะข้อนี้ (ถ้ามี)'), bound('date', 'res', base + '.due', {id:'d_' + form + kk(it.k)})),
     h('p', {class:'small muted'}, 'ข้ออื่นใช้วันส่งหลักฐานรวมในแท็บ "สรุปผล"'));
   const photos = h('div', {class:'photos'});
@@ -2021,7 +2066,7 @@ function itemCard(form, it) {
         h('p', {class:'small muted offnote', hidden:true}, 'ไม่เกี่ยวข้องกับประเภทการผลิตที่เลือก (ข้ามอัตโนมัติ)'))),
     h('div', {class:'seg' + (pf ? ' pf' : ''), role:'group', 'aria-label':'ผลการประเมินข้อ ' + it.k},
       opts.map(([v, l, s]) => h('button', {type:'button', 'data-v':String(v), 'aria-pressed':'false', onclick: () => setScore(form, it, v, card)}, l, s ? h('small', null, s) : null))),
-    h('div', {class:'tools'}, h('button', {type:'button', class:'tool', onclick: () => { commentWrap.hidden = !commentWrap.hidden; if (!commentWrap.hidden) commentWrap.querySelector('textarea').focus(); }}, 'ข้อคิดเห็น'), photoBtn),
+    h('div', {class:'tools'}, h('button', {type:'button', class:'tool', onclick: () => { commentWrap.hidden = !commentWrap.hidden; if (!commentWrap.hidden) commentWrap.querySelector('textarea').focus(); }}, 'สิ่งที่พบ'), photoBtn),
     commentWrap, recWrap, photos);
   card._parts = {commentWrap, recWrap, photos, cntB};
   syncItem(card);
@@ -2034,21 +2079,20 @@ function setScore(form, it, v, card) {
   const base = form + '.' + kk(it.k);
   const deficient = form === 'ts2' ? (nv === 0 || nv === 1) : nv === 'f';
   write('res', base + '.s', nv, 150);
-  if (deficient && !(cur.r || '').trim()) write('res', base + '.r', it.rec, 150);
   write('res', base + '.by', S.me && S.me.id || '', 150);
   syncItem(card); syncBound(card); drawTabs();
 }
 function syncItem(card) {
   const form = card.dataset.f, k = card.dataset.k, v = itemVal(S.cur.res, form, k);
-  const off = form === 'ts3' && ts3Off(S.cur.insp, k);
+  const off = itemOff(S.cur.insp, form, k);
   card.classList.toggle('off', off);
-  card.querySelector('.offnote').hidden = !off;
+  const on = card.querySelector('.offnote'); on.hidden = !off; if (off) on.textContent = form === 'ts2' ? 'ไม่ประเมินข้อนี้ (อนุญาตผลิตอาหารรายใหม่ ยังไม่มีการผลิต) ผู้ประกอบการรับรองในแท็บ "คำรับรอง (รายใหม่)"' : 'ไม่เกี่ยวข้องกับประเภทการผลิตที่เลือก (ข้ามอัตโนมัติ)';
   card.dataset.state = off ? 'na' : (v.s == null ? '' : String(v.s));
   for (const b of card.querySelectorAll('.seg button')) { b.setAttribute('aria-pressed', String(!off && String(v.s) === b.dataset.v)); b.disabled = off; }
   const p = card._parts; if (!p) return;
-  const deficient = form === 'ts2' ? (v.s === 0 || v.s === 1) : v.s === 'f';
+  const deficient = !off && (form === 'ts2' ? (v.s === 0 || v.s === 1) : v.s === 'f');
   p.recWrap.hidden = !deficient;
-  if ((v.c || '').trim()) p.commentWrap.hidden = false;
+  if ((v.c || '').trim() || deficient) p.commentWrap.hidden = false;
   const ph = v.ph || [];
   p.cntB.textContent = ph.length ? '(' + ph.length + ')' : '';
   const key = ph.join(',');
@@ -2085,7 +2129,7 @@ function missingItems() {
   const out = [], i = S.cur.insp;
   if (isFu()) { const it = S.cur.res.it || {}; for (const x of i.items || []) if (!(it[fik(x)] || {}).st) out.push({f:'fu', k:x.form + '.' + x.k, label:fuLabel(x)}); return out; }
   for (const f of activeForms(i)) for (const it of ITEMS[f]) {
-    if (f === 'ts3' && ts3Off(i, it.k)) continue;
+    if (itemOff(i, f, it.k)) continue;
     if (itemVal(S.cur.res, f, it.k).s == null) out.push({f, k:it.k});
   }
   return out;
@@ -2112,7 +2156,7 @@ function drawMissBars() {
   const all = missingItems();
   for (const el of document.querySelectorAll('[data-miss]')) {
     const f = el.dataset.miss, mine = all.filter(x => x.f === f);
-    const total = f === 'fu' ? (S.cur.insp.items || []).length : ITEMS[f].filter(it => !(f === 'ts3' && ts3Off(S.cur.insp, it.k))).length;
+    const total = f === 'fu' ? (S.cur.insp.items || []).length : ITEMS[f].filter(it => !(itemOff(S.cur.insp, f, it.k))).length;
     el.classList.toggle('done', !mine.length);
     el.replaceChildren(
       h('span', {class:'num'}, mine.length ? 'ประเมินแล้ว ' + (total - mine.length) + '/' + total + ' ข้อ · เหลือ ' + mine.length + ' ข้อ'
@@ -2125,7 +2169,7 @@ function drawMissBars() {
 /* ---- tab: ts2 ---- */
 function tabTs2() {
   const wrap = h('div', {class:'stack'});
-  wrap.append(h('div', {class:'note small'}, 'ดี = 2 คะแนน · พอใช้ = 1 · ปรับปรุง = 0 · ข้อที่มีป้าย ', h('span', {class:'mtag', style:'margin:0'}, 'M'), ' หากได้ 0 คะแนน ถือเป็นข้อบกพร่องรุนแรง · ผ่านเกณฑ์เมื่อทุกหมวดได้ไม่น้อยกว่าร้อยละ 60 และไม่พบข้อบกพร่องรุนแรง · เมื่อเลือก "พอใช้" หรือ "ปรับปรุง" ระบบจะเติมคำแนะนำให้แก้ไขได้'));
+  wrap.append(h('div', {class:'note small'}, 'ดี = 2 คะแนน · พอใช้ = 1 · ปรับปรุง = 0 · ข้อที่มีป้าย ', h('span', {class:'mtag', style:'margin:0'}, 'M'), ' หากได้ 0 คะแนน ถือเป็นข้อบกพร่องรุนแรง · ผ่านเกณฑ์เมื่อทุกหมวดได้ไม่น้อยกว่าร้อยละ 60 และไม่พบข้อบกพร่องรุนแรง · เมื่อเลือก "พอใช้" หรือ "ปรับปรุง" จะมีช่องให้กรอกคำแนะนำสำหรับการแก้ไข'));
   wrap.append(h('nav', {class:'catjump', id:'catJump', 'aria-label':'ไปที่หมวด'}, TS2.map(c => h('button', {type:'button', 'data-jump':c.n, title:'หมวดที่ ' + c.n + ' ' + c.title, onclick: () => jumpCat(c.n)},
     h('b', null, 'หมวด ' + c.n), h('span', {'data-jc':c.n}, '')))));
   for (const c of TS2) {
@@ -2163,7 +2207,7 @@ window.addEventListener('scroll', () => {
 function fillGood(form, items, v) {
   if (locked()) return;
   const patch = {};
-  for (const it of items) { if (form === 'ts3' && ts3Off(S.cur.insp, it.k)) continue; if (itemVal(S.cur.res, form, it.k).s == null) patch[kk(it.k)] = {s:v}; }
+  for (const it of items) { if (itemOff(S.cur.insp, form, it.k)) continue; if (itemVal(S.cur.res, form, it.k).s == null) patch[kk(it.k)] = {s:v}; }
   if (!Object.keys(patch).length) return toast('ทุกข้อในส่วนนี้ประเมินแล้ว');
   S.cur.res = merge(S.cur.res, {[form]:patch}); for (const [k, v] of Object.entries(patch)) queue('res', form + '.' + k + '.s', v.s, 200);
   syncEditor(); scheduleSummary();
@@ -2186,7 +2230,7 @@ function refreshCalc() {
     const s = c.spec[el.dataset.spec]; if (!s) continue;
     el.replaceChildren(h('span', {class:'num muted'}, s.done + '/' + s.n + ' ข้อ'), s.pass === true ? h('span', {class:'chip pass'}, 'ผ่านเกณฑ์') : s.pass === false ? h('span', {class:'chip fail'}, 'ไม่ผ่าน ' + s.fails + ' ข้อ') : h('span', {class:'chip draft'}, 'ยังตรวจไม่ครบ'));
   }
-  const box = $('#calcBox'); if (box) box.replaceChildren(calcView(c));
+  drawCalcParts(c);
   const fu = $('#fuBox'); if (fu && fu.dataset.key !== fuKey(c)) { fu.dataset.key = fuKey(c); fu.replaceChildren(fuView(c)); }
   drawMissBars();
   const fb = $('#finishBox'); if (fb) fb.replaceChildren(finishView());
@@ -2204,29 +2248,36 @@ function tabSpec(f) {
 }
 
 /* ---- tab: summary (ตส.1 sections 4–7) ---- */
-function calcView(c) {
+function calcOverall(c) {
   const b = c.final;
-  return h('div', {class:'stack'},
-    h('div', {class:'result-banner ' + b}, h('span', {class:'eyebrow', style:'color:inherit'}, '4.4 สรุปผลการตรวจสถานที่ผลิต ภาพรวม' + (c.fuRound ? ' (หลังตรวจติดตามครั้งที่ ' + c.fuRound + ')' : '')),
-      h('b', null, RES_LABEL[b]),
-      h('p', null, b === 'incomplete' ? 'ยังเหลือ ' + (c.needed - c.answered) + ' ข้อที่ยังไม่ประเมิน' :
-        'คะแนนรวม ' + c.got + '/' + c.full + ' (' + fmtPct(c.pct) + '%) · ' + (c.serious.length ? 'พบข้อบกพร่องรุนแรง ' + c.serious.length + ' ข้อ' : 'ไม่พบข้อบกพร่องรุนแรง')),
-      b === 'incomplete' ? h('div', {class:'stack', style:'gap:6px;margin-top:4px'}, h('span', {class:'small', style:'color:var(--ink)'}, 'กดเลขข้อเพื่อไปประเมิน:'), missChips(missingItems())) : null),
-    h('div', {class:'panel'}, h('h3', null, '4.2 ผลตามข้อกำหนดพื้นฐาน (ตส.2)'),
-      h('div', {class:'tw'}, h('table', {class:'t'}, h('thead', null, h('tr', null, h('th', null, 'หมวด'), h('th', {class:'n'}, 'คะแนนเต็ม'), h('th', {class:'n'}, 'ได้'), h('th', {class:'n'}, 'ร้อยละ'))),
-        h('tbody', null, c.cats.map(x => h('tr', null, h('td', null, x.n + '. ' + x.title), h('td', {class:'n'}, x.full), h('td', {class:'n'}, x.got),
-          h('td', {class:'n', style: x.full && x.pct < 60 ? 'color:var(--bad);font-weight:600' : null}, fmtPct(x.pct)))),
-          h('tr', null, h('td', null, h('b', null, 'รวมทุกข้อกำหนด')), h('td', {class:'n'}, h('b', null, c.full)), h('td', {class:'n'}, h('b', null, c.got)), h('td', {class:'n'}, h('b', null, fmtPct(c.pct))))))),
-      h('div', {style:'margin-top:10px'}, h('div', {class:'eyebrow'}, '4.2.3 ข้อบกพร่องรุนแรง'),
-        c.serious.length ? h('ul', {class:'deflist', style:'margin-top:6px'}, c.serious.map(s => h('li', {style:'color:var(--bad)'}, s.label))) : h('p', {class:'small muted'}, 'ไม่พบข้อบกพร่องรุนแรง'))),
-    Object.keys(c.spec).length ? h('div', {class:'panel'}, h('h3', null, '4.3 ผลตามข้อกำหนดเฉพาะ'),
-      h('ul', {class:'deflist'}, Object.entries(c.spec).map(([f, s]) => h('li', null, h('span', {class:'ino'}, SPEC[f].short), h('span', {style:'flex:1'}, SPEC[f].sum),
-        s.pass === true ? h('span', {class:'chip pass'}, 'ผ่าน') : s.pass === false ? h('span', {class:'chip fail'}, 'ไม่ผ่าน') : h('span', {class:'chip draft'}, 'ไม่ครบ'))))) :
-      h('div', {class:'panel'}, h('h3', null, '4.3 ผลตามข้อกำหนดเฉพาะ'), h('p', {class:'small muted'}, 'ไม่มีการผลิตอาหารที่ต้องตรวจประเมินตามข้อกำหนดเฉพาะ')),
-    c.deficits.length ? h('div', {class:'panel'}, h('h3', null, 'ข้อบกพร่องที่ต้องแก้ไข (' + c.deficits.length + ' ข้อ)'),
-      h('ul', {class:'deflist'}, c.deficits.map(d => h('li', null, h('span', {class:'ino'}, (d.form === 'ts2' ? '' : SPEC[d.form].short + ' ') + d.it.k),
-        h('span', {style:'flex:1;min-width:0'}, d.v.r || d.it.t, d.v.due ? h('span', {class:'muted'}, ' · ภายใน ' + thDate(d.v.due)) : null))))) : null);
+  return h('div', {class:'result-banner ' + b}, h('span', {class:'eyebrow', style:'color:inherit'}, '4.4 สรุปผลการตรวจสถานที่ผลิต ภาพรวม' + (c.fuRound ? ' (หลังตรวจติดตามครั้งที่ ' + c.fuRound + ')' : '')),
+    h('b', null, RES_LABEL[b]),
+    h('p', null, b === 'incomplete' ? 'ยังเหลือ ' + (c.needed - c.answered) + ' ข้อที่ยังไม่ประเมิน' :
+      'คะแนนรวม ' + c.got + '/' + c.full + ' (' + fmtPct(c.pct) + '%) · ' + (c.serious.length ? 'พบข้อบกพร่องรุนแรง ' + c.serious.length + ' ข้อ' : 'ไม่พบข้อบกพร่องรุนแรง')),
+    b === 'incomplete' ? h('div', {class:'stack', style:'gap:6px;margin-top:4px'}, h('span', {class:'small', style:'color:var(--ink)'}, 'กดเลขข้อเพื่อไปประเมิน:'), missChips(missingItems())) : null);
 }
+function calcTs2(c) {
+  return h('div', {class:'panel'}, h('h3', null, '4.2 ผลตามข้อกำหนดพื้นฐาน (ตส.2)'),
+    h('div', {class:'tw'}, h('table', {class:'t'}, h('thead', null, h('tr', null, h('th', null, 'หมวด'), h('th', {class:'n'}, 'คะแนนเต็ม'), h('th', {class:'n'}, 'ได้'), h('th', {class:'n'}, 'ร้อยละ'))),
+      h('tbody', null, c.cats.map(x => h('tr', null, h('td', null, x.n + '. ' + x.title), h('td', {class:'n'}, x.full), h('td', {class:'n'}, x.got),
+        h('td', {class:'n', style: x.full && x.pct < 60 ? 'color:var(--bad);font-weight:600' : null}, fmtPct(x.pct)))),
+        h('tr', null, h('td', null, h('b', null, 'รวมทุกข้อกำหนด')), h('td', {class:'n'}, h('b', null, c.full)), h('td', {class:'n'}, h('b', null, c.got)), h('td', {class:'n'}, h('b', null, fmtPct(c.pct))))))),
+    h('div', {style:'margin-top:10px'}, h('div', {class:'eyebrow'}, '4.2.3 ข้อบกพร่องรุนแรง'),
+      c.serious.length ? h('ul', {class:'deflist', style:'margin-top:6px'}, c.serious.map(s => h('li', {style:'color:var(--bad)'}, s.label))) : h('p', {class:'small muted'}, 'ไม่พบข้อบกพร่องรุนแรง')));
+}
+function calcSpec(c) {
+  return Object.keys(c.spec).length ? h('div', {class:'panel'}, h('h3', null, '4.3 ผลตามข้อกำหนดเฉพาะ'),
+    h('ul', {class:'deflist'}, Object.entries(c.spec).map(([f, s]) => h('li', null, h('span', {class:'ino'}, SPEC[f].short), h('span', {style:'flex:1'}, SPEC[f].sum),
+      s.pass === true ? h('span', {class:'chip pass'}, 'ผ่าน') : s.pass === false ? h('span', {class:'chip fail'}, 'ไม่ผ่าน') : h('span', {class:'chip draft'}, 'ไม่ครบ'))))) :
+    h('div', {class:'panel'}, h('h3', null, '4.3 ผลตามข้อกำหนดเฉพาะ'), h('p', {class:'small muted'}, 'ไม่มีการผลิตอาหารที่ต้องตรวจประเมินตามข้อกำหนดเฉพาะ'));
+}
+function calcDef(c) {
+  return h('div', {class:'panel'}, h('h3', null, 'ข้อบกพร่องที่ต้องแก้ไข (' + c.deficits.length + ' ข้อ)'),
+    c.deficits.length ? h('ul', {class:'deflist'}, c.deficits.map(d => h('li', null, h('span', {class:'ino'}, (d.form === 'ts2' ? '' : SPEC[d.form].short + ' ') + d.it.k),
+      h('span', {style:'flex:1;min-width:0'}, d.v.r || d.it.t, d.v.due ? h('span', {class:'muted'}, ' · ภายใน ' + thDate(d.v.due)) : null)))) : h('p', {class:'small muted'}, 'ไม่มีข้อที่ต้องแก้ไข'));
+}
+const CALC_PARTS = [['calcOverall', calcOverall], ['calcTs2', calcTs2], ['calcSpec', calcSpec], ['calcDef', calcDef]];
+function drawCalcParts(c) { for (const [id, fn] of CALC_PARTS) { const el = $('#' + id); if (el) el.replaceChildren(fn(c)); } }
 function fuKey(c) { return c.deficits.map(d => d.form + d.it.k).join('|') + '#' + c.initial + JSON.stringify(S.cur.res.fu || {}); }
 function fuView(c) {
   if (!c.deficits.length || c.initial !== 'fail') return h('p', {class:'small muted'}, 'ส่วนนี้ใช้เมื่อผลการตรวจครั้งแรก "ไม่ผ่านเกณฑ์" ผลการตรวจติดตามจะแสดงที่นี่อัตโนมัติ');
@@ -2245,20 +2296,12 @@ function tabSum() {
     if (locked()) return; if (!await confirmBox('ลบรูปนี้?', null, 'ลบรูป', true)) return; write('res', 'sum.ph', ids.filter(x => x !== id), 100); drawG(); }))); };
   drawG();
   return h('div', {class:'stack'},
-    h('div', {id:'calcBox'}, calcView(c)),
     h('div', {class:'panel stack'}, h('h2', null, '4.1 กำลังแรงม้าและจำนวนคนงาน'),
       h('div', {class:'grid2'},
         field('เครื่องจักร ณ วันที่ตรวจ (แรงม้า)', bound('text', 'res', 'sum.hpNow', {id:'sHp', inputmode:'decimal'})), field('คนงาน ณ วันที่ตรวจ (คน)', bound('text', 'res', 'sum.wkNow', {id:'sWk', inputmode:'numeric'})),
         field('เดิมที่เคยได้รับอนุญาต (แรงม้า)', bound('text', 'res', 'sum.hpOld', {id:'sHpO', inputmode:'decimal'})), field('คนงานเดิม (คน)', bound('text', 'res', 'sum.wkOld', {id:'sWkO', inputmode:'numeric'})))),
-    h('div', {class:'panel stack'}, h('h2', null, '4.2.3 (9) ข้อบกพร่องรุนแรงอื่น ๆ'),
-      h('p', {class:'small muted'}, 'ข้อ (1)–(8) ระบบดึงจากข้อ M ที่ได้ 0 คะแนนให้อัตโนมัติ กรอกช่องนี้เฉพาะเมื่อคณะผู้ตรวจประเมินว่ามีความเสี่ยงอื่นที่ทำให้อาหารไม่ปลอดภัย'),
-      bound('textarea', 'res', 'sum.other9', {id:'sO9', rows:2})),
-    h('div', {class:'panel stack'}, h('h2', null, 'กรณีไม่ผ่านเกณฑ์ ต้องดำเนินการปรับปรุงแก้ไข'),
-      h('label', {class:'check'}, bound('checkbox', 'res', 'sum.fuOnsite', {id:'sFuO'}), h('span', null, 'ต้องตรวจติดตามผลการแก้ไข (follow-up audit) ณ สถานที่ผลิต')),
-      h('label', {class:'check'}, bound('checkbox', 'res', 'sum.fuDoc', {id:'sFuD'}), h('span', null, 'ส่งหลักฐานการแก้ไข เช่น รูปถ่าย เอกสาร แบบฟอร์ม รายงาน')),
-      field('ภายในวันที่', bound('date', 'res', 'sum.fuDate', {id:'sFuDate'}))),
     h('div', {class:'panel stack'}, h('h2', null, '5. ข้อเท็จจริงขณะตรวจประเมิน'),
-      h('div', {class:'grid2'}, field('5.1 ผู้นำตรวจและให้ข้อมูล', bound('text', 'res', 'sum.guide', {id:'sG'})), field('ตำแหน่ง', bound('text', 'res', 'sum.guidePos', {id:'sGP'}))),
+      h('p', {class:'small muted'}, '5.1 ผู้นำตรวจและให้ข้อมูล: ' + ((S.cur.res.sum && S.cur.res.sum.guide) || '— (กรอกที่แท็บ "ข้อมูลการตรวจ")') + ((S.cur.res.sum && S.cur.res.sum.guidePos) ? ' · ' + S.cur.res.sum.guidePos : '')),
       field('5.2 การจัดแบ่งบริเวณของสถานที่ผลิต', bound('textarea', 'res', 'sum.layout', {id:'sL'})),
       field('5.3 พบการผลิตอาหาร/ขั้นตอนการผลิต', bound('textarea', 'res', 'sum.process', {id:'sP', rows:4})),
       field('5.4 การเปลี่ยนแปลงรายการเครื่องมือเครื่องจักร/แบบแปลนแผนผัง/จำนวนแรงม้า', bound('textarea', 'res', 'sum.changes', {id:'sC'})),
@@ -2266,6 +2309,17 @@ function tabSum() {
       h('div', {class:'stack', style:'gap:6px'}, h('span', {class:'small', style:'font-weight:500;color:var(--muted)'}, 'รูปภาพรวมของสถานที่ (ถ้ามี)'), gph,
         true ? h('label', {class:'tool photo-add', style:'align-self:flex-start'}, 'แนบรูปภาพรวม', h('input', {type:'file', accept:'image/*', multiple:true, onchange: async e => {
           for (const f of [...e.target.files]) { try { const b64 = await blobToB64(await shrink(f)); const up = await API('uploadPhoto', {id:S.cur.id, b64, mime:'image/jpeg', name:'overview_' + Date.now() + '.jpg'}); up.id = up.fileId; S.fileCache[up.id] = {data:'data:image/jpeg;base64,' + b64, mime:'image/jpeg'}; write('res', 'sum.ph', [...((S.cur.res.sum && S.cur.res.sum.ph) || []), up.id], 100); drawG(); } catch (er) { toast(assetErr(er)); } } }})) : null)),
+    h('div', {id:'calcOverall'}, calcOverall(c)),
+    h('div', {id:'calcTs2'}, calcTs2(c)),
+    h('div', {class:'panel stack'}, h('h2', null, '4.2.3 (9) ข้อบกพร่องรุนแรงอื่น ๆ'),
+      h('p', {class:'small muted'}, 'ข้อ (1)–(8) ระบบดึงจากข้อ M ที่ได้ 0 คะแนนให้อัตโนมัติ กรอกช่องนี้เฉพาะเมื่อคณะผู้ตรวจประเมินว่ามีความเสี่ยงอื่นที่ทำให้อาหารไม่ปลอดภัย'),
+      bound('textarea', 'res', 'sum.other9', {id:'sO9', rows:2})),
+    h('div', {id:'calcSpec'}, calcSpec(c)),
+    h('div', {id:'calcDef'}, calcDef(c)),
+    h('div', {class:'panel stack'}, h('h2', null, 'กรณีไม่ผ่านเกณฑ์ ต้องดำเนินการปรับปรุงแก้ไข'),
+      h('label', {class:'check'}, bound('checkbox', 'res', 'sum.fuOnsite', {id:'sFuO'}), h('span', null, 'ต้องตรวจติดตามผลการแก้ไข (follow-up audit) ณ สถานที่ผลิต')),
+      h('label', {class:'check'}, bound('checkbox', 'res', 'sum.fuDoc', {id:'sFuD'}), h('span', null, 'ส่งหลักฐานการแก้ไข เช่น รูปถ่าย เอกสาร แบบฟอร์ม รายงาน')),
+      field('ภายในวันที่', bound('date', 'res', 'sum.fuDate', {id:'sFuDate'}))),
     h('div', {class:'panel stack'}, h('h2', null, 'ผลการตรวจติดตาม (follow-up audit)'), h('div', {id:'fuBox', 'data-key':fuKey(c)}, fuView(c))),
     nextBtn());
 }
@@ -2380,7 +2434,7 @@ function showFuResult() {
       !pass && i.round >= 2 ? h('div', {class:'note bad small'}, 'ตรวจติดตามครบ 2 ครั้งแล้วยังไม่ผ่านเกณฑ์ ควรพิจารณาดำเนินการตามกฎหมาย') : null,
       h('p', {class:'small muted', style:'text-align:center'}, 'ปิดโดย ' + (i.closedBy || '—') + (i.doneAt ? ' · ' + fmtDT(i.doneAt) : '')),
       h('div', {class:'row', style:'justify-content:center'}, h('button', {class:'btn', onclick: () => { close(); openEditor(i.parent); }}, 'เปิดการตรวจครั้งแรก'),
-        h('button', {class:'btn', onclick: () => { close(); S.tab = 'sign'; drawTabs(); redrawTab(); }}, 'ส่งผล/ดาวน์โหลด PDF'), h('button', {class:'btn primary', onclick:close}, 'ปิด'))));
+        h('button', {class:'btn', onclick: () => { close(); S.tab = 'sign'; drawTabs(); redrawTab(); setTimeout(() => { const p = $('#sendPanel'); if (p) p.scrollIntoView({behavior:'smooth', block:'start'}); }, 80); }}, 'ส่งผล/สร้าง PDF'), h('button', {class:'btn primary', onclick:close}, 'ปิด'))));
   document.body.append(sc);
 }
 
@@ -2421,6 +2475,9 @@ function syncSigs() {
   syncBound($('#tabBody'));
   const st = $('#finishBox'); if (st) st.replaceChildren(finishView());
 }
+function fullOrg(o) { o = String(o || '').trim(); const u = UNITS.find(x => x[1] === o || x[3] === o); return u ? u[3] : o; }
+function agencyOf(i) { const ins = i.ins || {}; const orgs = Object.keys(ins).sort((a, b) => a - b).map(k => ins[k]).filter(x => x && String(x.name || '').trim()).map(x => fullOrg(x.org)).filter(Boolean);
+  const u = orgs.filter((x, n) => orgs.indexOf(x) === n); return u.length ? u.join(', ') : (i.agency || ''); }
 function insList() { const ins = S.cur.insp.ins || {}; return Object.keys(ins).sort((a, b) => a - b).map(k => ({k, ...ins[k]})).filter(x => (x.name || '').trim()); }
 function finishView() {
   const i = S.cur.insp, sig = S.cur.sig || {}, fu = isFu();
@@ -2433,6 +2490,12 @@ function finishView() {
   for (const x of contactMissing(i)) miss.push(x + ' (แท็บข้อมูลการตรวจ)');
   if (!insList().length) miss.push('ชื่อผู้ตรวจอย่างน้อย 1 คน (แท็บข้อมูลการตรวจ)');
   else if (unsigned.length) miss.push('ลายมือชื่อผู้ตรวจทุกคน (ยังขาด: ' + unsigned.map(x => x.name).join(', ') + ')');
+  if (isNewLic(i)) { const st = S.cur.res.stm || {};
+    if (!String(st.name || '').trim()) miss.push('ชื่อผู้ให้ถ้อยคำ (แท็บคำรับรอง)');
+    if (!st.ack) miss.push('ติ๊กรับทราบคำรับรอง (แท็บคำรับรอง)');
+    if (!(sig.st && sig.st.img)) miss.push('ลายมือชื่อผู้ให้ถ้อยคำ (แท็บคำรับรอง)'); }
+  const amEd = i.edition || 1;
+  if (amEd > 1 && !(sig['am' + amEd] && sig['am' + amEd].img)) miss.push('ลายมือชื่อผู้แก้ไขบันทึก (ฉบับที่ ' + amEd + ')');
   if (i.status === 'done') return h('div', {class:'result-banner ' + fin}, h('b', null, 'ปิดการตรวจแล้ว · ' + RES_LABEL[fin]), h('p', null, fu ? 'บันทึกผลกลับไปที่การตรวจครั้งแรก ' + i.parent + ' แล้ว' : 'บันทึกเข้าทะเบียนเรียบร้อย'));
   return h('div', {class:'stack', style:'gap:8px'},
     miss.length ? h('div', {class:'note warn small'}, 'ก่อนปิดการตรวจ ต้องมี: ' + miss.join(' · ')) : h('div', {class:'note small'}, fu ? 'ครบถ้วนแล้ว กดปิดการตรวจติดตามเพื่อบันทึกผลกลับไปที่การตรวจครั้งแรก' : 'ครบถ้วนแล้ว กดปิดการตรวจเพื่อบันทึกผลเข้าทะเบียนและล็อกเอกสาร'),
@@ -2459,11 +2522,72 @@ async function finish() {
     syncEditor(); redrawTab(); showResult();
   } catch (e) { toast(errText(e)); }
 }
+const STM_TXT = {
+  c21: d => 'ข้าพเจ้ายื่นขอใบอนุญาตผลิตอาหาร/เลขประจำสถานที่ผลิตอาหาร (สบ.1) และขอรับรองว่าตามบันทึกการตรวจประเมินสถานที่ผลิตอาหาร ลงวันที่ ' + d + ' ตามข้อกำหนดพื้นฐาน ข้อ 2.8 อุปกรณ์การชั่งตวงวัด มีความเหมาะสม เพียงพอ มีความเที่ยงตรงแม่นยำ มีการสอบเทียบอย่างน้อยปีละ 1 ครั้ง ข้อ 3.9.1 ผลิตภัณฑ์สุดท้ายมีคุณภาพหรือมาตรฐานตามประกาศกระทรวงสาธารณสุขที่เกี่ยวข้อง โดยมีผลวิเคราะห์อย่างน้อยปีละ 1 ครั้ง ข้อ 3.12 มีการเก็บรักษาบันทึกและรายงาน หลังจากพ้นระยะเวลาการวางจำหน่ายที่แสดงในฉลากผลิตภัณฑ์อย่างน้อย 1 ปี ข้อ 3.13 มีการตรวจประเมินตนเองโดยหน่วยงานภายในหรือหน่วยงานภายนอก ตามประกาศฯ ฉบับนี้ อย่างน้อยปีละ 1 ครั้ง และดำเนินการโดยผู้ที่มีความรู้ความเข้าใจ กรณีพบข้อบกพร่องต้องมีมาตรการแก้ไข ข้อ 5.1.1 ผู้ปฏิบัติงานและบุคลากรในบริเวณผลิตไม่เป็นโรคหรือพาหะของโรคตามกฎกระทรวง ฉบับที่ 1 ไม่มีบาดแผล และมีมาตรการสำหรับผู้ปฎิบัติงานที่มีอาการของโรค พนักงานเจ้าหน้าที่ไม่สามารถตรวจประเมินได้ เพราะยังไม่มีการผลิต',
+  c22: 'ข้าพเจ้าขอรับรองว่าเมื่อได้รับใบอนุญาตผลิตอาหาร/เลขประจำสถานที่ผลิตอาหารแล้วจะผลิตอาหารโดยปฏิบัติตามข้อกำหนดดังกล่าว หากข้าพเจ้าฝ่าฝืนหรือไม่ปฏิบัติตาม ข้าพเจ้ายินยอมให้สำนักงานคณะกรรมการอาหารและยาดำเนินการตามกฎหมายต่อไป',
+  c23: 'ในการมาตรวจสถานที่ในครั้งนี้มิได้ทำให้ทรัพย์สินของสถานที่นี้หรือบุคคลใดสูญหาย เสียหายหรือเสื่อมค่าแต่อย่างใด อ่านแล้วรับรองว่าถูกต้องจึงลงลายมือชื่อไว้เป็นหลักฐาน',
+  c3: 'ข้าพเจ้าขอรับรองว่าคำให้การของข้าพเจ้าให้การด้วยความสมัครใจและเป็นความสัตย์จริงทุกประการ',
+  c4: 'ข้าพเจ้าขอรับรองว่าจะปฏิบัติตามที่ได้ให้ถ้อยคำไว้แล้วทุกประการ จึงลงลายมือชื่อไว้เป็นสำคัญต่อหน้าพนักงานเจ้าหน้าที่'};
+function stmPrefill() {
+  if (locked()) return; const i = S.cur.insp, st = S.cur.res.stm || {}, g = S.cur.res.sum || {};
+  const set = (k, v) => { if (v && !String(st[k] || '').trim()) write('res', 'stm.' + k, v, 100); };
+  set('name', g.guide); set('role', g.guidePos); set('before', insList().map(x => x.name).join(', ')); set('time', i.time);
+  set('tel', i.phone); set('prov', 'ขอนแก่น'); set('nat', 'ไทย'); set('race', 'ไทย');
+}
+function tabStm() {
+  stmPrefill();
+  const f = (label, k, o) => field(label, bound('text', 'res', 'stm.' + k, Object.assign({id:'stm_' + k}, o || {})));
+  return h('div', {class:'stack'},
+    h('div', {class:'note small'}, 'อนุญาตผลิตอาหาร (รายใหม่): ยังไม่มีการผลิต จึงไม่ประเมิน ตส.2 ข้อ ' + NEW_SKIP.join(', ') + ' ผู้ประกอบการให้ถ้อยคำรับรองแทน ระบบจะออกเป็นหน้า "บันทึกคำให้การ" ใน PDF'),
+    h('fieldset', {disabled: locked(), class:'stack', style:'border:0;padding:0;margin:0'},
+    h('div', {class:'panel stack'}, h('h2', null, 'ผู้ให้ถ้อยคำ'),
+      h('div', {class:'grid2'}, f('คำให้การของ (ชื่อ – สกุล)', 'name'), f('เป็น (ฐานะของสถานที่ผลิต)', 'role', {placeholder:'เช่น ผู้ดำเนินกิจการ ผู้แทน'}),
+        f('บัตรประชาชนเลขที่', 'idno', {inputmode:'numeric', maxlength:'17', autocomplete:'off'}), f('บัตรหมดอายุ', 'idexp', {placeholder:'เช่น 12 มี.ค. 2575'}),
+        f('อายุ (ปี)', 'age', {inputmode:'numeric'}), f('เชื้อชาติ', 'race'), f('สัญชาติ', 'nat'), f('ต่อหน้า (พนักงานเจ้าหน้าที่)', 'before'))),
+    h('div', {class:'panel stack'}, h('h2', null, 'ที่ตั้งสถานที่ผลิต'),
+      h('p', {class:'small muted'}, (S.cur.insp.pname || '') + ' · ' + (S.cur.insp.addr || '')),
+      h('div', {class:'grid2'}, f('เลขที่', 'no'), f('ตรอก/ซอย', 'soi'), f('ถนน', 'road'), f('หมู่ที่', 'moo'), f('ตำบล', 'tambon'), f('อำเภอ', 'amphoe'), f('จังหวัด', 'prov'), f('รหัสไปรษณีย์', 'zip', {inputmode:'numeric'}),
+        f('โทรศัพท์', 'tel', {inputmode:'tel'}), f('สถานที่ใกล้เคียง', 'near'), f('เขตสถานีตำรวจ', 'police'), f('เวลาที่มาตรวจ (น.)', 'time'))),
+    h('div', {class:'panel stack'}, h('h2', null, 'คำรับรองของผู้ประกอบการ'),
+      h('ol', {class:'small', style:'margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px'},
+        h('li', null, STM_TXT.c21(thDate(S.cur.insp.date, true))), h('li', null, STM_TXT.c22), h('li', null, STM_TXT.c23), h('li', null, STM_TXT.c3), h('li', null, STM_TXT.c4)),
+      h('label', {class:'check'}, bound('checkbox', 'res', 'stm.ack', {id:'stm_ack'}), h('span', null, h('b', null, 'ข้าพเจ้ารับทราบและรับรองตามข้อความข้างต้นทุกข้อ'))),
+      sigPad('st', 'ลายมือชื่อผู้ให้ถ้อยคำ' + ((S.cur.res.stm || {}).name ? ' · ' + S.cur.res.stm.name : '')),
+      h('p', {class:'small muted'}, 'ลายมือชื่อพนักงานเจ้าหน้าที่ในบันทึกคำให้การ ใช้ลายมือชื่อเดียวกับที่ลงในแท็บ "ลงนาม"'))),
+    nextBtn());
+}
+function buildStmPage(i) {
+  const st = (S.cur.res && S.cur.res.stm) || {}, sig = S.cur.sig || {}, dd = String(i.date || '');
+  const TH_M = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+  const d = dd ? new Date(dd + 'T00:00:00') : null;
+  const sgn = (s, name, role) => h('div', {class:'avoid', style:'text-align:center;margin-top:10px'},
+    h('div', null, 'ลงชื่อ ', s && s.img ? h('img', {src:s.img, alt:'', style:'height:44px;max-width:220px;object-fit:contain;vertical-align:bottom'}) : fill('', 200), ' ' + role),
+    h('div', null, '(', fill(name, 200), ')'));
+  return h('div', {class:'rpt'}, rptHdr(i, 'บันทึกคำให้การ'),
+    h('h1', null, 'บันทึกคำให้การ'),
+    h('p', {style:'text-align:right'}, S.office || 'สำนักงานสาธารณสุขจังหวัดขอนแก่น'),
+    h('p', {style:'text-align:right'}, 'วันที่ ', fill(d ? String(d.getDate()) : '', 30), ' เดือน ', fill(d ? TH_M[d.getMonth()] : '', 80), ' พ.ศ. ', fill(d ? String(d.getFullYear() + 543) : '', 50)),
+    h('p', null, 'คำให้การของ ', fill(st.name, 220), ' บัตรประชาชนเลขที่ ', fill(st.idno, 130), ' หมดอายุ ', fill(st.idexp, 80)),
+    h('p', null, 'เรื่อง การตรวจสถานที่ผลิตอาหารประกอบการขอใบอนุญาต/เลขประจำสถานที่ผลิต'),
+    h('p', null, 'ต่อหน้า ', fill(st.before, 480)),
+    h('p', null, h('b', null, 'ข้อ 1'), ' ข้าพเจ้า ', fill(st.name, 200), ' อายุ ', fill(st.age, 30), ' ปี เชื้อชาติ ', fill(st.race, 50), ' สัญชาติ ', fill(st.nat, 50)),
+    h('p', null, 'เป็น ', fill(st.role, 140), ' ของสถานที่ผลิตอาหาร ชื่อ ', fill(i.pname, 260)),
+    h('p', null, 'ตั้งอยู่เลขที่ ', fill(st.no, 60), ' ตรอก/ซอย ', fill(st.soi, 90), ' ถนน ', fill(st.road, 90), ' หมู่ที่ ', fill(st.moo, 30)),
+    h('p', null, 'ตำบล ', fill(st.tambon, 100), ' อำเภอ ', fill(st.amphoe, 100), ' จังหวัด ', fill(st.prov, 90), ' รหัสไปรษณีย์ ', fill(st.zip, 50)),
+    h('p', null, 'โทรศัพท์ ', fill(st.tel, 100), ' สถานที่ใกล้เคียง ', fill(st.near, 130), ' เขตสถานีตำรวจ ', fill(st.police, 110)),
+    h('p', {class:'ind'}, h('b', null, 'ข้อ 2'), ' ข้าพเจ้าขอให้การว่า วันนี้ เวลาประมาณ ', fill(st.time || i.time, 50), ' น. ได้มีพนักงานเจ้าหน้าที่ตาม พ.ร.บ.อาหาร พ.ศ.2522 ดังรายนามข้างต้น มาแสดงตัวเพื่อตรวจสอบสถานที่ผลิตอาหาร ขณะตรวจมีข้าพเจ้า ผู้ดำเนินกิจการ/ผู้แทน เป็นผู้นำตรวจ และให้การโดยตลอดดังนี้'),
+    h('p', {class:'ind'}, '2.1 ' + STM_TXT.c21(thDate(i.date, true))),
+    h('p', {class:'ind'}, '2.2 ' + STM_TXT.c22), h('p', {class:'ind'}, '2.3 ' + STM_TXT.c23),
+    h('p', {class:'ind'}, h('b', null, 'ข้อ 3'), ' ' + STM_TXT.c3), h('p', {class:'ind'}, h('b', null, 'ข้อ 4'), ' ' + STM_TXT.c4),
+    sgn(sig.st, st.name, 'ผู้ให้ถ้อยคำ'),
+    insList().map(x => sgn(sig['i' + x.k], x.name, 'พนักงานเจ้าหน้าที่')));
+}
 function tabSign() {
   const i = S.cur.insp;
   const fs = h('fieldset', {disabled: locked()},
     h('div', {class:'panel stack'}, h('h2', null, 'ผู้ประกอบการรับรอง' + (isFu() && i.fuMode === 'evidence' ? ' (ไม่บังคับ กรณีพิจารณาจากหลักฐาน)' : '')),
       h('p', {class:'small', style:'font-family:var(--f-doc);font-size:.95rem'}, 'ในการที่พนักงานเจ้าหน้าที่หรือผู้ตรวจประเมินสถานที่ผลิตอาหาร มาตรวจสถานที่ครั้งนี้ มิได้ทำให้ทรัพย์สินของผู้ขออนุญาต/ผู้รับอนุญาตสูญหาย หรือเสียหายแต่ประการใด อ่านให้ฟังแล้วรับรองว่าถูกต้อง จึงลงนามรับรองไว้ต่อเจ้าหน้าที่ท้ายบันทึก'),
+      (S.cur.res.sum && S.cur.res.sum.guide) ? h('button', {class:'btn ghost sm', type:'button', style:'align-self:flex-start', onclick: () => { if (locked()) return; write('sig', 'opName', S.cur.res.sum.guide, 100); syncBound($('#tabBody')); }}, 'ใช้ชื่อผู้นำตรวจ (' + S.cur.res.sum.guide + ')') : null,
       h('div', {class:'grid2'}, field('ชื่อ – สกุล ผู้ลงนาม', bound('text', 'sig', 'opName', {id:'gOpN'})),
         field('ฐานะ', bound('select', 'sig', 'opRole', {id:'gOpR', options:[['','— เลือกฐานะ —'],['ผู้รับอนุญาต','ผู้รับอนุญาต'],['ผู้ขออนุญาต','ผู้ขออนุญาต'],['ผู้แทน','ผู้แทน']]}))),
       sigPad('op', 'ลายมือชื่อผู้ประกอบการ/ผู้แทน')),
@@ -2474,58 +2598,90 @@ function tabSign() {
     i.type === 'LC' ? h('div', {class:'panel stack'}, h('h2', null, 'ผู้อนุมัติผลการตรวจ (กรณีตรวจประกอบการพิจารณาอนุญาต)'),
       h('div', {class:'grid2'}, field('ชื่อ – สกุล', bound('text', 'sig', 'apName', {id:'gApN'})), field('วันที่', bound('date', 'sig', 'apDate', {id:'gApD'}))),
       sigPad('ap', 'ลายมือชื่อผู้อนุมัติ (ลงภายหลังได้)')) : null);
-  return h('div', {class:'stack'}, fs,
+  const ed = i.edition || 1, lastV = (i.versions || []).slice(-1)[0] || {}, am = i.amendOpen || {};
+  const amPanel = ed > 1 ? h('fieldset', {disabled: locked()}, h('div', {class:'panel stack'}, h('h2', null, 'ผู้แก้ไขบันทึกลงนาม (ฉบับที่ ' + ed + ')'),
+    h('p', {class:'small'}, h('b', null, 'เหตุผลการแก้ไข: '), am.reason || lastV.reason || '', h('br'), h('span', {class:'muted'}, 'ขอแก้ไขโดย ' + (am.by || lastV.by || '') + ' เมื่อ ' + fmtDT(am.at || lastV.at))),
+    h('p', {class:'small muted'}, 'ผู้ตรวจและผู้ประกอบการไม่ต้องลงนามใหม่ ผู้แก้ไขลงนามรับรองการแก้ไขที่นี่ ลายมือชื่อ เหตุผล และวันที่แก้ไขจะแสดงใน PDF'),
+    sigPad('am' + ed, 'ลายมือชื่อผู้แก้ไข · ' + (am.by || lastV.by || '')))) : null;
+  return h('div', {class:'stack'}, fs, amPanel,
     h('div', {class:'panel stack'}, h('h2', null, 'ปิดการตรวจ'), h('div', {id:'finishBox'}, finishView())),
     sendPanel());
 }
-function sendPanel() {
-  const i = S.cur.insp;
-  const fu = isFu(), fc = fu ? fuCalc() : null;
-  const c = fu ? fc.c : calc(i, S.cur.res);
-  const subj = (fu ? 'ผลการตรวจติดตามการแก้ไขสถานที่ผลิตอาหาร ' : 'ผลการตรวจประเมินสถานที่ผลิตอาหาร ') + (i.pname || '') + ' วันที่ ' + thDate(i.date, true);
-  const lead = insList()[0] || {};
-  const body = () => fu ? ['เรียน ' + (i.operator || 'ผู้ประกอบการ'), '',
-    'ตามที่พนักงานเจ้าหน้าที่ได้ตรวจติดตามผลการแก้ไข ครั้งที่ ' + i.round + ' ' + (i.fuMode === 'evidence' ? 'โดยพิจารณาจากหลักฐานที่ส่งมา' : 'ณ สถานที่ผลิต') + ' ของ ' + (i.pname || '') + ' เมื่อวันที่ ' + thDate(i.date, true) + ' (ต่อเนื่องจากการตรวจเลขที่ ' + i.parent + ' วันที่ ' + thDate(i.pdate, true) + ')',
-    'ผลการตรวจติดตาม: ' + RES_LABEL[i.final || fc.result] + ' · แก้ไขแล้ว ' + fc.fixed + ' จาก ' + fc.items.length + ' ข้อ',
-    fc.not ? 'ยังมีข้อที่ต้องแก้ไขเพิ่มเติม ' + fc.not + ' ข้อ รายละเอียดตามไฟล์ PDF ที่แนบมา' : 'รายละเอียดตามไฟล์ PDF ที่แนบมา', '',
-    contactText(i) ? 'หากมีข้อสงสัย ติดต่อ ' + contactText(i) : '', '',
-    'จึงเรียนมาเพื่อโปรดทราบและดำเนินการ', '', lead.name || '', lead.pos || '', i.agency || ''].filter((x, n, a) => x !== '' || a[n - 1] !== '').join('\n')
-   : ['เรียน ' + (i.operator || 'ผู้ประกอบการ'), '',
+function contactLines(i) {
+  const c = i.contact || {};
+  return [[c.name, c.pos].filter(Boolean).join(' ') , c.org || '', c.phone ? 'โทร ' + c.phone : '', c.email ? 'อีเมล ' + c.email : ''].filter(x => String(x || '').trim());
+}
+function emailBodyText() {
+  const i = S.cur.insp, fu = isFu();
+  const tail = ['', 'จึงเรียนมาเพื่อโปรดทราบและดำเนินการต่อไป', '', 'ขอขอบพระคุณ'].concat(contactLines(i).length ? ['', 'ติดต่อสอบถามเพิ่มเติม (ผู้ประสานงาน)'].concat(contactLines(i)) : []);
+  if (fu) { const fc = fuCalc();
+    return ['เรียน ' + (i.operator || 'ผู้ประกอบการ'),
+      'ตามที่พนักงานเจ้าหน้าที่ได้ตรวจติดตามผลการแก้ไข ครั้งที่ ' + i.round + ' ' + (i.fuMode === 'evidence' ? 'โดยพิจารณาจากหลักฐานที่ส่งมา' : 'ณ สถานที่ผลิต') + ' ของ ' + (i.pname || '') + (i.lic ? ' (เลขที่ ' + i.lic + ')' : '') + ' เมื่อวันที่ ' + thDate(i.date, true),
+      'ผลการตรวจติดตาม: ' + RES_LABEL[i.final || fc.result],
+      'แก้ไขแล้ว ' + fc.fixed + ' จาก ' + fc.items.length + ' ข้อ',
+      fc.not ? 'ยังมีข้อที่ต้องแก้ไขเพิ่มเติม ' + fc.not + ' ข้อ' : '',
+      'รายละเอียดตามไฟล์ PDF ที่แนบมา'].filter(Boolean).concat(tail).join('\n'); }
+  const c = calc(i, S.cur.res), due = S.cur.res.sum && S.cur.res.sum.fuDate;
+  return ['เรียน ' + (i.operator || 'ผู้ประกอบการ'),
     'ตามที่พนักงานเจ้าหน้าที่ได้ตรวจประเมินสถานที่ผลิตอาหาร ' + (i.pname || '') + (i.lic ? ' (เลขที่ ' + i.lic + ')' : '') + ' เมื่อวันที่ ' + thDate(i.date, true),
-    'ผลการตรวจ: ' + RES_LABEL[c.final] + (c.full ? ' คะแนนรวมร้อยละ ' + fmtPct(c.pct) : ''),
-    c.deficits.length ? 'มีข้อที่ต้องปรับปรุงแก้ไข ' + c.deficits.length + ' ข้อ รายละเอียดและคำแนะนำตามไฟล์ PDF ที่แนบมา' : 'รายละเอียดตามไฟล์ PDF ที่แนบมา',
-    (S.cur.res.sum && S.cur.res.sum.fuDate) ? 'ขอให้ส่งหลักฐานการแก้ไขภายในวันที่ ' + thDate(S.cur.res.sum.fuDate, true) : '',
-    contactText(i) ? 'หากมีข้อสงสัย ติดต่อ ' + contactText(i) : '', '',
-    'จึงเรียนมาเพื่อโปรดทราบและดำเนินการ', '', lead.name || '', lead.pos || '', i.agency || ''].filter((x, n, a) => x !== '' || a[n - 1] !== '').join('\n');
+    'ผลการตรวจ: ' + RES_LABEL[c.final],
+    c.full ? 'คะแนนรวมร้อยละ ' + fmtPct(c.pct) : '',
+    c.deficits.length ? 'มีข้อที่ต้องปรับปรุงแก้ไข ' + c.deficits.length + ' ข้อ' : '',
+    c.deficits.length ? 'รายละเอียดและคำแนะนำตามไฟล์ PDF ที่แนบมา' : 'รายละเอียดตามไฟล์ PDF ที่แนบมา',
+    due ? 'ขอให้ส่งหลักฐานการแก้ไขภายในวันที่ ' + thDate(due, true) : ''].filter(Boolean).concat(tail).join('\n');
+}
+function sendPanel() {
+  const i = S.cur.insp, fu = isFu();
+  if (i.status !== 'done') return h('div', {class:'panel stack', id:'sendPanel'}, h('h2', null, 'เอกสารผลการตรวจ'),
+    h('p', {class:'small muted'}, 'ลงนามให้ครบแล้วกด "ปิดการตรวจ" ด้านบนก่อน ส่วนสร้าง PDF และส่งอีเมลจะเปิดให้ใช้หลังปิดการตรวจ'));
+  const subj = (fu ? 'ผลการตรวจติดตามการแก้ไขสถานที่ผลิตอาหาร ' : 'ผลการตรวจประเมินสถานที่ผลิตอาหาร ') + (i.pname || '') + ' วันที่ ' + thDate(i.date, true);
   const copy = async (txt, el) => { try { await navigator.clipboard.writeText(txt); toast('คัดลอกแล้ว'); } catch { if (el) { el.focus(); el.select(); } toast('เลือกข้อความแล้ว กดคัดลอกจากเมนูของเครื่อง'); } };
-  const emailEl = bound('email', 'insp', 'email', {id:'sendEmail', placeholder:'อีเมลผู้ประกอบการ'});
-  const ccEl = h('input', {type:'text', id:'sendCc', placeholder:'สำเนาถึง (ถ้ามี) คั่นด้วยจุลภาค'});
-  const bodyEl = h('textarea', {id:'sendBody', rows:10, value:body()});
-  const sentLine = () => { const s = (S.cur.insp.sent || []).slice(-1)[0]; return s ? 'ส่งล่าสุดถึง ' + s.to + ' เมื่อ ' + new Date(s.at).toLocaleString('th-TH', {dateStyle:'medium', timeStyle:'short'}) : 'ยังไม่เคยส่งอีเมล'; };
+  // 1) PDF: create, then a download button appears
+  const fresh = () => S.lastPdf && S.lastPdf.id === S.cur.id && S.lastPdf.ver === S.cur.version;
+  const pdfRow = h('div', {class:'row'});
+  const drawPdf = () => {
+    const mk = h('button', {class:'btn' + (fresh() ? '' : ' primary'), id:'pdfBtn'}, fresh() ? 'สร้าง PDF ใหม่' : 'สร้าง PDF');
+    mk.onclick = async () => { if (await makePdf(mk, {download:false})) { drawPdf(); toast('สร้าง PDF แล้ว และเก็บสำเนาไว้ใน Drive'); } };
+    pdfRow.replaceChildren(mk, fresh() ? h('button', {class:'btn primary', id:'pdfDl', onclick: () => saveBlob(S.lastPdf.blob, S.lastPdf.fname)}, 'ดาวน์โหลด PDF') : null,
+      fresh() ? h('span', {class:'small muted'}, S.lastPdf.fname) : null);
+  };
+  drawPdf();
+  // 2) e-mail: main recipient = operator e-mail from the info tab, copies = staff picked from the list
+  const emailEl = bound('email', 'insp', 'email', {id:'sendEmail', placeholder:'อีเมลผู้ประกอบการ (กรอกที่แท็บ "ข้อมูลการตรวจ")'});
+  const ccBox = h('div', {class:'stack', id:'ccBox', style:'gap:4px'}, h('span', {class:'small muted'}, 'กำลังโหลดรายชื่อเจ้าหน้าที่…'));
+  const ccMore = h('input', {type:'text', id:'sendCc', placeholder:'อีเมลอื่น ๆ (ถ้ามี) คั่นด้วยจุลภาค'});
+  API('teamMails', {id:S.cur.id}).then(list => {
+    if (!list.length) { ccBox.replaceChildren(h('span', {class:'small muted'}, 'ยังไม่มีเจ้าหน้าที่ที่บันทึกอีเมลไว้ในบัญชี')); return; }
+    ccBox.replaceChildren(...list.map(x => h('label', {class:'check'}, h('input', {type:'checkbox', class:'ccPick', value:x.email}),
+      h('span', null, x.name || x.username, h('span', {class:'small muted'}, ' · ' + [x.unitName, x.email].filter(Boolean).join(' · ')), x.team ? h('span', {class:'chip', style:'margin-left:6px'}, 'ทีมตรวจ') : null))));
+  }).catch(() => ccBox.replaceChildren(h('span', {class:'small muted'}, 'โหลดรายชื่อไม่สำเร็จ ใส่อีเมลเองในช่องด้านล่างได้')));
+  const bodyEl = h('textarea', {id:'sendBody', rows:14, value:emailBodyText()});
+  const sentLine = () => { const s = (S.cur.insp.sent || []).slice(-1)[0]; return s ? 'ส่งล่าสุดถึง ' + s.to + (s.cc ? ' (สำเนา ' + s.cc + ')' : '') + ' เมื่อ ' + new Date(s.at).toLocaleString('th-TH', {dateStyle:'medium', timeStyle:'short'}) : 'ยังไม่เคยส่งอีเมล'; };
   const status = h('p', {class:'small muted'}, sentLine());
   const sendBtn = h('button', {class:'btn primary'}, 'ส่งอีเมลพร้อมแนบ PDF');
   sendBtn.onclick = async () => {
     const to = (emailEl.value || '').trim();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to.split(/[,;\s]+/)[0] || '')) return toast('กรอกอีเมลผู้ประกอบการให้ถูกต้อง');
-    if (S.cur.insp.status !== 'done') return toast('ปิดการตรวจ (ลงนามครบ) ก่อนส่งผลให้ผู้ประกอบการ', 4000);
-    if (!await confirmBox('ส่งผลการตรวจทางอีเมล?', 'ถึง ' + to + ' พร้อมแนบไฟล์ PDF ผลการตรวจ', 'ส่งอีเมล')) return;
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to.split(/[,;\s]+/)[0] || '')) return toast('กรอกอีเมลผู้ประกอบการที่แท็บ "ข้อมูลการตรวจ" ให้ถูกต้อง', 4000);
+    const cc = [...document.querySelectorAll('.ccPick:checked')].map(x => x.value).concat(ccMore.value.split(/[,;\s]+/).filter(x => /@/.test(x))).filter((x, n, a) => a.indexOf(x) === n && x !== to).join(',');
+    if (!await confirmBox('ส่งผลการตรวจทางอีเมล?', 'ถึง ' + to + (cc ? '\nสำเนาถึง ' + cc : '') + '\nพร้อมแนบไฟล์ PDF ผลการตรวจ', 'ส่งอีเมล')) return;
     sendBtn.disabled = true;
     try {
-      const ok = await makePdf(sendBtn, {download:false}); if (!ok) throw new Error('สร้าง PDF ไม่สำเร็จ');
+      if (!fresh()) { const ok = await makePdf(sendBtn, {download:false}); if (!ok) throw new Error('สร้าง PDF ไม่สำเร็จ'); drawPdf(); }
       sendBtn.textContent = 'กำลังส่งอีเมล…';
-      const r = await API('sendPdf', {id:S.cur.id, to, cc:ccEl.value, subject:subj, body:bodyEl.value});
-      S.cur.insp.sent = (S.cur.insp.sent || []).concat([{to, at:r.at, by:S.me.id}]);
-      status.textContent = sentLine(); toast('ส่งอีเมลถึง ' + to + ' แล้ว', 4000);
+      const r = await API('sendPdf', {id:S.cur.id, to, cc, subject:subj, body:bodyEl.value});
+      S.cur.insp.sent = (S.cur.insp.sent || []).concat([{to, cc, at:r.at, by:S.me.id}]);
+      status.textContent = sentLine(); toast('ส่งอีเมลถึง ' + to + (cc ? ' และสำเนาอีก ' + cc.split(',').length + ' คน' : '') + ' แล้ว', 4000);
     } catch (e) { toast('ส่งไม่สำเร็จ: ' + errText(e), 6000); }
     sendBtn.disabled = false; sendBtn.textContent = 'ส่งอีเมลพร้อมแนบ PDF';
   };
-  return h('div', {class:'panel stack'}, h('h2', null, 'เอกสารผลการตรวจ'),
-    h('p', {class:'small muted'}, fu ? 'ไฟล์ PDF เป็นบันทึกผลการตรวจติดตาม: ตารางเทียบผลเดิมกับผลการแก้ไขทุกข้อ ผลที่คำนวณใหม่ ลายมือชื่อ และรูปก่อน–หลังแก้ไข' : 'ไฟล์ PDF ประกอบด้วย ตส.1 พร้อมลายมือชื่อ, ตส.2, ข้อกำหนดเฉพาะที่ใช้, เอกสารแนบท้ายคำแนะนำการแก้ไข และรูปภาพประกอบ ระบบเก็บสำเนาไว้ใน Google Drive ของ สสจ. ทุกครั้งที่สร้าง'),
-    h('div', {class:'row'}, h('button', {class:'btn', id:'pdfBtn', onclick: e => makePdf(e.currentTarget)}, 'ดาวน์โหลด PDF')),
+  return h('div', {class:'panel stack', id:'sendPanel'}, h('h2', null, 'เอกสารผลการตรวจ'),
+    h('p', {class:'small muted'}, fu ? 'ไฟล์ PDF เป็นบันทึกผลการตรวจติดตาม: ตารางเทียบผลเดิมกับผลการแก้ไขทุกข้อ ผลที่คำนวณใหม่ ลายมือชื่อ และรูปก่อน–หลังแก้ไข' : 'ไฟล์ PDF ประกอบด้วย ตส.1 พร้อมลายมือชื่อ, ตส.2, ข้อกำหนดเฉพาะที่ใช้, เอกสารแนบท้ายคำแนะนำการแก้ไข และรูปภาพประกอบ ระบบเก็บสำเนาไว้ใน Google Drive ทุกครั้งที่สร้าง'),
+    pdfRow,
     h('div', {class:'divider'}),
-    h('h3', null, 'ส่งผลให้ผู้ประกอบการทางอีเมล'),
-    h('p', {class:'small muted'}, 'ระบบส่งจาก Gmail ส่วนกลางของ สสจ. พร้อมแนบ PDF ให้อัตโนมัติ (ส่งได้หลังปิดการตรวจ)'),
-    field('อีเมลผู้รับ', emailEl), field('สำเนาถึง', ccEl), field('ข้อความ (แก้ไขได้)', bodyEl),
+    h('h3', null, 'ส่งผลทางอีเมล'),
+    field('ผู้รับ (ผู้ประกอบการ)', emailEl),
+    h('div', {class:'f'}, h('span', null, 'สำเนาถึงเจ้าหน้าที่ (เลือกได้หลายคน)'), ccBox), ccMore,
+    field('ข้อความ (แก้ไขได้)', bodyEl),
     h('div', {class:'row'}, sendBtn, h('button', {class:'btn', onclick: () => copy(subj + '\n\n' + bodyEl.value, bodyEl)}, 'คัดลอกข้อความ (ใช้ส่ง LINE ได้)')),
     status);
 }
@@ -2549,10 +2705,12 @@ function edNote(i) {
   return h('p', {class:'center small'}, 'ฉบับที่ ' + (i.edition || vs.length + 1) + ' (ฉบับแก้ไข) · แก้ไขเมื่อ ' + fmtDT(last.at) + ' โดย ' + last.by + ' · เหตุผล: ' + last.reason);
 }
 function edTable(i) {
-  const vs = i.versions || []; if (!vs.length) return null;
+  const vs = i.versions || []; if (!vs.length) return null; const sig = (S.cur && S.cur.sig) || {};
   return h('div', {class:'avoid', style:'margin-top:8px'}, h('p', null, h('b', null, 'บันทึกการแก้ไขเอกสาร')),
-    h('table', null, h('thead', null, h('tr', null, h('th', null, 'ฉบับ'), h('th', null, 'วันเวลาที่แก้ไข'), h('th', null, 'ผู้แก้ไข'), h('th', {style:'width:50%'}, 'เหตุผล'))),
-      h('tbody', null, vs.map(v => h('tr', null, h('td', {class:'c'}, v.ed + ' → ' + (v.ed + 1)), h('td', {class:'c'}, fmtDT(v.at)), h('td', null, v.by), h('td', null, v.reason))))));
+    h('table', null, h('thead', null, h('tr', null, h('th', null, 'ฉบับ'), h('th', null, 'วันที่แก้ไข'), h('th', null, 'ผู้แก้ไข'), h('th', {style:'width:38%'}, 'เหตุผลการแก้ไข'), h('th', {style:'width:22%'}, 'ลายมือชื่อผู้แก้ไข'))),
+      h('tbody', null, vs.map(v => { const s = sig['am' + (v.ed + 1)];
+        return h('tr', null, h('td', {class:'c'}, v.ed + ' → ' + (v.ed + 1)), h('td', {class:'c'}, fmtDT(v.at)), h('td', null, v.by), h('td', null, v.reason),
+          h('td', {class:'c'}, s && s.img ? [h('img', {src:s.img, alt:'', style:'height:40px;max-width:100%;object-fit:contain;display:block;margin:0 auto'}), h('div', {class:'small'}, 'ลงนาม ' + fmtDT(s.at))] : '')); }))));
 }
 function opSignedEd(i, s) { if (!s || !s.at) return 0; return 1 + (i.versions || []).filter(v => v.at < s.at).length; }
 function buildFuReport() {
@@ -2610,7 +2768,7 @@ function buildReport() {
     h('table', {style:'border:0'}, h('tbody', null, (() => { const cnt = Math.max(6, ...Object.keys(ins).filter(k => (ins[k].name || '').trim()).map(Number)), half = Math.ceil(cnt / 2);
       return Array.from({length:half}, (_, r) => r); })().map((r, _, arr) => h('tr', null, [r + 1, r + 1 + arr.length].map(n => h('td', {style:'border:0;width:50%;padding:1px 18px'}, '(' + n + ') ', fill(ins[n] && ins[n].name ? ins[n].name + ((ins[n].pos || ins[n].org) ? ' (' + [ins[n].pos, ins[n].org].filter(Boolean).join(' ') + ')' : '') : '', 200))))))),
     h('p', {class:'ind'}, '1.2 ตำแหน่ง/หน่วยงาน'),
-    ...AUTH.map(([k, l]) => h('p', {class:'ind2'}, cb(i.auth === k), l, i.auth === k && (i.agency || i.agencyNo) ? h('span', null, ' ', fill([i.agency, i.agencyNo].filter(Boolean).join(' เลขที่ '))) : null)),
+    ...AUTH.map(([k, l]) => h('p', {class:'ind2'}, cb(i.auth === k), l, i.auth === k && (agencyOf(i) || i.agencyNo) ? h('span', null, ' ', fill([agencyOf(i), i.agencyNo].filter(Boolean).join(' เลขที่ '))) : null)),
     h('h2', null, '2. ข้อมูลสถานที่ผลิตที่ตรวจประเมิน'),
     h('p', {class:'ind'}, '2.1 ใบอนุญาตผลิตอาหาร/เลขสถานที่ผลิตอาหาร เลขที่ ', fill(i.lic, 140), ' หมดอายุวันที่ 31 ธันวาคม พ.ศ. ', fill(i.licExp, 50)),
     h('p', {class:'ind'}, '2.2 ชื่อสถานที่ผลิต/ผู้รับอนุญาต ', fill(i.pname + (i.licensee && i.licensee !== i.pname ? ' / ' + i.licensee : ''), 300)),
@@ -2677,12 +2835,13 @@ function buildReport() {
       h('tbody', null, TS2.map(cat => { const cx = c.cats.find(x => x.n === cat.n); return [
         h('tr', {class:'sec'}, h('td', {colspan:7}, 'หมวดที่ ' + cat.n + ' ' + cat.title)),
         ...cat.rows.map(r => { if (!r.k) return h('tr', null, h('td', {colspan:7}, r.h));
-          const v = itemVal(res, 'ts2', r.k);
+          const v = itemOff(i, 'ts2', r.k) ? {s:'new'} : itemVal(res, 'ts2', r.k);
           return h('tr', null, h('td', null, r.k + ' ' + r.t + (r.m ? ' (M)' : '')),
-            v.s === 'na' ? h('td', {class:'c', colspan:3}, 'ไม่เกี่ยวข้อง') : [h('td', {class:'c'}, mark(v.s === 2)), h('td', {class:'c'}, mark(v.s === 1)), h('td', {class:'c'}, mark(v.s === 0))],
+            v.s === 'new' ? h('td', {class:'c small', colspan:3}, 'ไม่ประเมิน (รายใหม่) · รับรองตามบันทึกคำให้การ') : v.s === 'na' ? h('td', {class:'c', colspan:3}, 'ไม่เกี่ยวข้อง') : [h('td', {class:'c'}, mark(v.s === 2)), h('td', {class:'c'}, mark(v.s === 1)), h('td', {class:'c'}, mark(v.s === 0))],
             h('td', {class:'c'}, fuMark(v, 1)), h('td', {class:'c'}, fuMark(v, 2)), h('td', {class:'small'}, note(v))); }),
         h('tr', {class:'tot'}, h('td', null, 'หมวดที่ ' + cat.n + ' คะแนนเต็ม ' + cx.full + ' · คะแนนที่ได้ ' + cx.got + ' · ร้อยละ ' + fmtPct(cx.pct)), h('td', {colspan:6}, ''))]; }))));
   parts.push(ts2);
+  if (isNewLic(i)) parts.push(buildStmPage(i));
   /* ---- specific forms ---- */
   for (const f of ['ts3','ts4','ts5']) {
     if (!(i.forms && i.forms[f])) continue;
@@ -2692,7 +2851,7 @@ function buildReport() {
       f === 'ts3' ? h('p', null, 'ตรวจประเมินสถานที่ผลิต ', ...TS3_TYPES.map(([k, l]) => h('span', null, cb(t3[k]), l + '  '))) : null,
       h('table', null, h('thead', null, h('tr', null, h('th', {style:'width:52%'}, 'ข้อกำหนด'), h('th', null, 'ผ่าน'), h('th', null, 'ไม่ผ่าน'), h('th', null, 'แก้ไขครั้งที่ 1'), h('th', null, 'แก้ไขครั้งที่ 2'), h('th', {style:'width:18%'}, 'หมายเหตุ'))),
         h('tbody', null, FORMS[f].map(r => { if (!r.k) return h('tr', {class:'sec'}, h('td', {colspan:6}, r.h));
-          const off = f === 'ts3' && ts3Off(i, r.k); const v = off ? {s:'na'} : itemVal(res, f, r.k);
+          const off = itemOff(i, f, r.k); const v = off ? {s:'na'} : itemVal(res, f, r.k);
           return h('tr', null, h('td', null, r.k + ' ' + r.t, r.d && r.d.length ? h('div', {class:'small'}, r.d.join(' ')) : null),
             v.s === 'na' ? h('td', {class:'c', colspan:2}, 'ไม่เกี่ยวข้อง') : [h('td', {class:'c'}, mark(v.s === 'p')), h('td', {class:'c'}, mark(v.s === 'f'))],
             h('td', {class:'c'}, fuMark(v, 1)), h('td', {class:'c'}, fuMark(v, 2)), h('td', {class:'small'}, note(v))); })))));
@@ -2702,19 +2861,24 @@ function buildReport() {
   const att = h('div', {class:'rpt'}, rptHdr(i, 'เอกสารแนบท้าย'),
     h('h1', null, 'คำแนะนำในการปรับปรุงแก้ไขสถานที่ผลิตอาหาร'),
     h('p', {class:'center'}, i.pname || '', i.lic ? ' · เลขที่ ' + i.lic : '', ' · ตรวจเมื่อ ' + thDate(i.date, true)),
-    c.deficits.length ? (() => { const urgent = c.deficits.some(d => d.v.due);
-      return h('table', null, h('thead', null, h('tr', null, h('th', null, 'ลำดับ'), h('th', null, 'ข้อ'), h('th', {style: urgent ? 'width:34%' : 'width:40%'}, 'ข้อบกพร่อง/สิ่งที่พบ'), h('th', {style: urgent ? 'width:40%' : 'width:46%'}, 'คำแนะนำของเจ้าหน้าที่'), urgent ? h('th', null, 'กำหนดแก้ไขเร่งด่วน') : null)),
-      h('tbody', null, c.deficits.map((d, n) => h('tr', {class:'avoid'}, h('td', {class:'c'}, n + 1), h('td', {class:'c'}, (d.form === 'ts2' ? 'ตส.2 ' : SPEC[d.form].short + ' ') + d.it.k + (d.it.m ? ' (M)' : '')),
-        h('td', null, d.v.c || d.it.t, d.form === 'ts2' ? h('div', {class:'small'}, 'ผลประเมิน: ' + (d.v.s === 0 ? 'ปรับปรุง' : 'พอใช้')) : null), h('td', null, d.v.r || d.it.rec),
-        urgent ? h('td', {class:'c'}, d.v.due ? h('b', null, thDate(d.v.due)) : '') : null)))); })() :
+    c.deficits.length ? h('table', null, h('thead', null, h('tr', null, h('th', null, 'ลำดับ'), h('th', null, 'ข้อ'), h('th', {style:'width:33%'}, 'สิ่งที่พบ'), h('th', {style:'width:37%'}, 'คำแนะนำของเจ้าหน้าที่'), h('th', {style:'width:13%'}, 'ตรวจสอบการแก้ไข'))),
+      h('tbody', null, c.deficits.map((d, n) => h('tr', {class:'avoid'}, h('td', {class:'c'}, n + 1), h('td', {class:'c'}, (d.form === 'ts2' ? 'ตส.2 ' : SPEC[d.form].short + ' ') + d.it.k + (d.it.m ? ' (M)' : ''),
+          d.form === 'ts2' ? h('div', {class:'small'}, d.v.s === 0 ? 'ปรับปรุง' : 'พอใช้') : null),
+        h('td', null, d.v.c || d.it.t), h('td', null, d.v.r || '', d.v.due ? h('div', null, h('b', null, 'แก้ไขเร่งด่วนภายใน ' + thDate(d.v.due, true))) : null),
+        h('td', {class:'c', style:'white-space:nowrap'}, cb(false), ' แก้ไขแล้ว'))))) :
       h('p', null, 'ไม่พบข้อบกพร่องที่ต้องปรับปรุงแก้ไข ขอให้รักษามาตรฐานการผลิตตามหลักเกณฑ์วิธีการที่ดีในการผลิตอาหารอย่างต่อเนื่อง'),
     sum.fuDate ? h('p', null, 'ขอให้ส่งหลักฐานการแก้ไข เช่น รูปถ่าย เอกสาร แบบฟอร์ม รายงาน ภายในวันที่ ', fill(thDate(sum.fuDate, true))) : null,
     contactBox(i));
   parts.push(att);
   /* ---- photos ---- */
   const pics = [];
-  for (const f of activeForms(i)) for (const it of ITEMS[f]) { const v = itemVal(res, f, it.k); for (const id of (v.ph || [])) pics.push({id, cap:(f === 'ts2' ? 'ตส.2' : SPEC[f].short) + ' ข้อ ' + it.k + (v.c ? ' – ' + v.c : '')}); }
-  for (const id of (sum.ph || [])) pics.push({id, cap:'ภาพรวมสถานที่'});
+  const sLab = (f, v) => f === 'ts2' ? ({2:'ดี', 1:'พอใช้', 0:'ปรับปรุง', na:'ไม่เกี่ยวข้อง'})[v.s] : ({p:'ผ่าน', f:'ไม่ผ่าน', na:'ไม่เกี่ยวข้อง'})[v.s];
+  const short = t => { t = String(t || ''); return t.length > 110 ? t.slice(0, 108) + '…' : t; };
+  for (const f of activeForms(i)) for (const it of ITEMS[f]) { const v = itemVal(res, f, it.k); for (const id of (v.ph || [])) pics.push({id,
+    cap:[h('b', null, (f === 'ts2' ? 'ตส.2' : SPEC[f].short) + ' ข้อ ' + it.k + (sLab(f, v) ? ' (' + sLab(f, v) + ')' : '')),
+      h('div', null, v.c ? 'สิ่งที่พบ: ' + v.c : short(it.t)),
+      v.r ? h('div', null, 'คำแนะนำ: ' + v.r) : null]}); }
+  for (const id of (sum.ph || [])) pics.push({id, cap:[h('b', null, 'ภาพรวมสถานที่'), sum.layout ? h('div', null, short(sum.layout)) : null]});
   for (let n = 0; n < pics.length; n += 6) parts.push(h('div', {class:'rpt'}, rptHdr(i, 'ภาพประกอบการตรวจ'), n === 0 ? h('h1', null, 'ภาพประกอบการตรวจประเมิน') : null,
     h('div', {class:'photos'}, pics.slice(n, n + 6).map(p => h('figure', null, h('img', {src:(S.fileCache[p.id] || {}).data || '', alt:''}), h('figcaption', null, p.cap))))));
   return parts;
@@ -2796,6 +2960,7 @@ async function makePdf(btn, opts = {download:true}) {
     btn.textContent = 'กำลังบันทึกเข้า Drive…';
     const r = await API('savePdf', {id:S.cur.id, b64:await blobToB64(blob), name:fname});
     S.cur.insp.pdfId = r.pdfId;
+    S.lastPdf = {blob, fname, id:S.cur.id, ver:S.cur.version};
     if (opts.download) { saveBlob(blob, fname); toast('สร้าง PDF แล้ว และเก็บสำเนาไว้ใน Drive'); }
     return true;
   } catch (e) {
@@ -2914,6 +3079,15 @@ try {
   else window.addEventListener('popstate', e => navApply(e.state));
 } catch {}
 
+/* every pop-up gets a close (X) button: it presses the dialog's own cancel/close button when there is one */
+function addCloseX(sc) {
+  const dlg = sc.querySelector('.dialog'); if (!dlg || dlg.querySelector('.dlg-x') || sc.classList.contains('noclose')) return;
+  const x = h('button', {type:'button', class:'dlg-x', 'aria-label':'ปิดหน้าต่าง', title:'ปิดหน้าต่าง', onclick: () => {
+    const own = [...dlg.querySelectorAll('button')].find(b => b !== x && /^(ยกเลิก|ปิด|ไม่ใช่|ไว้ทีหลัง)$/.test(b.textContent.trim()));
+    if (own) own.click(); else { sc.remove(); S.fastPoll = false; } }}, '×');
+  dlg.prepend(h('div', {class:'dlg-xbar'}, x));
+}
+new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1 && n.classList.contains('scrim')) addCloseX(n); }).observe(document.body, {childList:true});
 /* keep dialogs inside the part of the screen the keyboard doesn't cover (LINE / Chrome on phones) */
 (function () {
   const vv = window.visualViewport; if (!vv) return;
