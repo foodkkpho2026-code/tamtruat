@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <script>window.TT_API = 'https://script.google.com/macros/s/AKfycbx1J31lHBJeJiMLFgOhEoTUbD-xA7krFz8dpTD5l1v0uMwsq2p94j9W45z0Zcg6ZCsu/exec';</script>
 <title>ระบบ ตามตรวจ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -248,8 +248,14 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums;whi
 .sig-img img{max-height:110px}
 
 /* modal + toast */
-.scrim{position:fixed;inset:0;background:rgba(10,16,12,.55);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px}
-.dialog{background:var(--surface);border-radius:14px;max-width:460px;width:100%;padding:20px;display:flex;flex-direction:column;gap:14px;max-height:90vh;overflow:auto}
+.scrim{position:fixed;left:0;right:0;top:var(--vvt,0px);height:var(--vvh,100dvh);background:rgba(10,16,12,.55);z-index:50;display:flex;align-items:center;justify-content:center;padding:12px;padding-bottom:max(12px,env(safe-area-inset-bottom));overscroll-behavior:contain}
+.dialog{background:var(--surface);border-radius:14px;max-width:460px;width:100%;padding:20px;display:flex;flex-direction:column;gap:14px;max-height:calc(var(--vvh,100dvh) - 24px);overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.dialog .acts{position:sticky;bottom:-20px;margin:0 -20px -20px;padding:12px 20px calc(12px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line);z-index:2;justify-content:flex-end}
+@media (max-width:560px){.dialog{padding:16px;border-radius:12px}.dialog .acts{bottom:-16px;margin:0 -16px -16px;padding:10px 16px calc(10px + env(safe-area-inset-bottom))}.dialog .acts .btn{flex:1;min-height:48px}}
+.pw-wrap{position:relative;display:flex}
+.pw-wrap input{flex:1;width:100%;padding-right:48px}
+.pw-eye{position:absolute;right:2px;top:50%;transform:translateY(-50%);width:44px;height:44px;display:grid;place-items:center;border:0;background:none;color:var(--muted);cursor:pointer;border-radius:8px}
+.pw-eye:hover{color:var(--ink)}.pw-eye:focus-visible{outline:2px solid var(--accent,#2E7D4F);outline-offset:-2px}
 .lightbox img{max-width:100%;max-height:82vh;border-radius:8px}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:60;font-size:.9rem;max-width:calc(100vw - 32px)}
 .note{background:var(--accent-soft);border-radius:8px;padding:10px 12px;font-size:.88rem}
@@ -788,7 +794,7 @@ async function doJoin(code, guest) {
       guest ? h('p', {class:'small muted'}, 'เข้าร่วมแบบไม่มีบัญชี: เห็นและแก้ไขได้เฉพาะการตรวจนี้ ถ้าหลุดหรือเปลี่ยนเครื่อง สแกน QR หรือใส่รหัสเดิม แล้วกรอกชื่อเดิม ระบบจะต่อจากเดิมให้')
         : h('label', {class:'check'}, h('input', {type:'checkbox', id:'jfR', checked:true}), h('span', null, 'จำข้อมูลนี้ไว้ในบัญชีของฉัน ครั้งหน้าไม่ต้องกรอกใหม่')),
       err,
-      h('div', {class:'row', style:'justify-content:flex-end'}, h('button', {class:'btn', type:'button', onclick:close}, 'ยกเลิก'), h('button', {class:'btn primary', type:'submit'}, info.already ? 'บันทึก' : 'เข้าร่วมตรวจ'))));
+      h('div', {class:'row acts'}, h('button', {class:'btn', type:'button', onclick:close}, 'ยกเลิก'), h('button', {class:'btn primary', type:'submit'}, info.already ? 'บันทึก' : 'เข้าร่วมตรวจ'))));
   document.body.append(sc);
   setTimeout(() => { const f = $('#jfF'); if (f && !f.value) f.focus(); }, 50);
 }
@@ -819,7 +825,7 @@ const QR_SRC = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
 async function inviteDialog() {
   if (!S.cur) return;
   let r; try { r = await API('invite', {id:S.cur.id}); } catch (e) { return toast(errText(e), 4000); }
-  const url = String(r.url || S.appUrl || '').replace(/\/macros\/u\/\d+\/s\//, '/macros/s/') + '?j=' + r.code;
+  const url = (IN_GAS ? String(r.url || S.appUrl || '') : location.origin + location.pathname).replace(/\/macros\/u\/\d+\/s\//, '/macros/s/') + '?j=' + r.code;
   const img = h('img', {alt:'QR code สำหรับเข้าร่วมตรวจ', style:'width:min(72vw,280px);height:auto;image-rendering:pixelated;background:#FFFFFF;padding:8px;border-radius:8px'});
   try { await loadScript(QR_SRC); const q = window.qrcode(0, 'M'); q.addData(url); q.make(); img.src = q.createDataURL(8, 2); } catch { img.alt = 'สร้าง QR ไม่ได้ ใช้รหัสด้านล่างแทน'; }
   const copy = async () => { try { await navigator.clipboard.writeText(url); toast('คัดลอกลิงก์แล้ว ส่งทาง LINE ได้เลย'); } catch { toast(url, 8000); } };
@@ -836,12 +842,37 @@ async function inviteDialog() {
       h('p', {class:'small muted'}, 'QR และรหัสใช้ได้จนกว่าจะปิดการตรวจ')));
   document.body.append(sc); drawLobby();
 }
+/* password box with a show/hide (eye) button */
+function pwInput(id, ac, ph) {
+  const inp = h('input', {type:'password', id, autocomplete:ac || 'current-password', autocapitalize:'none', spellcheck:'false', placeholder:ph || null});
+  const eye = h('button', {type:'button', class:'pw-eye', 'aria-label':'แสดงรหัสผ่าน', 'aria-pressed':'false', onclick: () => {
+    const show = inp.type === 'password'; inp.type = show ? 'text' : 'password';
+    eye.setAttribute('aria-pressed', String(show)); eye.setAttribute('aria-label', show ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'); eye.replaceChildren(eyeIcon(show)); }}, eyeIcon(false));
+  return h('div', {class:'pw-wrap'}, inp, eye);
+}
+function eyeIcon(open) {
+  const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('width', '22'); svg.setAttribute('height', '22'); svg.setAttribute('aria-hidden', 'true');
+  svg.innerHTML = '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/>' +
+    (open ? '' : '<path d="M4 4l16 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>');
+  return svg;
+}
+function unitSelect(id, cur, onchange) {
+  const opt = ([k, l]) => h('option', {value:k, selected:cur === k}, l);
+  return h('select', {id, onchange}, h('option', {value:''}, '— เลือกหน่วยงาน —'),
+    h('optgroup', {label:'สสจ. และอำเภอเมือง'}, UNITS.filter(x => !/^[AH]-/.test(x[0])).map(opt)),
+    h('optgroup', {label:'สำนักงานสาธารณสุขอำเภอ'}, UNITS.filter(x => x[0].startsWith('A-')).map(opt)),
+    h('optgroup', {label:'โรงพยาบาลประจำอำเภอ'}, UNITS.filter(x => x[0].startsWith('H-')).map(opt)));
+}
+function authGo(v, extra) { S.authView = v; Object.assign(S, extra || {}); render(); window.scrollTo(0, 0); }
+async function afterLogin(r) { S.token = r.token; try { localStorage.setItem('gmp_token', r.token); } catch {} S.authView = 'login'; await loadAll(); }
 function viewLogin() {
+  if (S.authView === 'register') return viewRegister();
+  if (S.authView === 'forgot') return viewForgot();
   const err = h('p', {class:'small', style:'color:var(--bad);min-height:1.2em', role:'alert'});
   const submit = async e => {
     e.preventDefault(); const btn = e.currentTarget.querySelector('button[type=submit]'); btn.disabled = true; err.textContent = '';
-    try { const r = await API('login', {username:$('#lgU').value, password:$('#lgP').value});
-      S.token = r.token; try { localStorage.setItem('gmp_token', r.token); } catch {} await loadAll(); }
+    try { await afterLogin(await API('login', {username:$('#lgU').value, password:$('#lgP').value})); }
     catch (x) { err.textContent = errText(x); btn.disabled = false; }
   };
   return h('div', {class:'login'}, h('form', {class:'panel stack', onsubmit:submit},
@@ -850,15 +881,81 @@ function viewLogin() {
       h('span', {class:'small'}, 'ไม่มีบัญชีก็เข้าร่วมได้ กรอกชื่อ ตำแหน่ง หน่วยงานแล้วเริ่มตรวจได้ทันที'),
       h('button', {class:'btn primary', type:'button', onclick: () => doJoin(S.joinCode, true)}, 'เข้าร่วมตรวจโดยไม่ต้องมีบัญชี'),
       h('span', {class:'small muted'}, 'ถ้ามีบัญชีในระบบอยู่แล้ว เข้าสู่ระบบด้านล่าง ระบบจะเปิดแบบตรวจให้เอง')) : null,
-    h('p', {class:'muted small'}, 'ใช้ชื่อผู้ใช้และรหัสผ่านที่ได้รับจากผู้ดูแลระบบ สสจ.ขอนแก่น'),
-    field('ชื่อผู้ใช้', h('input', {type:'text', id:'lgU', autocomplete:'username', autocapitalize:'none', spellcheck:'false', required:true})),
-    field('รหัสผ่าน', h('input', {type:'password', id:'lgP', autocomplete:'current-password', required:true})),
-    err, h('button', {class:'btn primary', type:'submit'}, 'เข้าสู่ระบบ')),
+    field('ชื่อผู้ใช้', h('input', {type:'text', id:'lgU', value:S._lastUser || '', autocomplete:'username', autocapitalize:'none', spellcheck:'false', required:true})),
+    field('รหัสผ่าน', pwInput('lgP', 'current-password')),
+    err, h('button', {class:'btn primary', type:'submit'}, 'เข้าสู่ระบบ'),
+    h('div', {class:'spread'}, h('button', {class:'linkbtn', type:'button', onclick: () => authGo('forgot')}, 'ลืมรหัสผ่าน?'),
+      h('button', {class:'linkbtn', type:'button', onclick: () => authGo('register')}, 'ลงทะเบียนเจ้าหน้าที่ใหม่'))),
     S.joinCode ? null : h('form', {class:'panel stack', style:'margin-top:14px;gap:8px', onsubmit: e => { e.preventDefault(); const v = $('#gjCode').value.trim(); if (v) doJoin(v, true); }},
       h('h2', null, 'มีรหัสเชิญร่วมตรวจ?'),
       h('p', {class:'small muted'}, 'สำหรับผู้ร่วมตรวจที่ยังไม่มีบัญชี ใส่รหัส 6 ตัวที่หัวหน้าทีมให้มา'),
       h('div', {class:'row'}, h('input', {type:'text', id:'gjCode', placeholder:'รหัส 6 ตัว', maxlength:'8', autocapitalize:'characters', autocomplete:'off', spellcheck:'false', style:'flex:1;min-width:140px'}),
         h('button', {class:'btn', type:'submit'}, 'เข้าร่วมตรวจ'))));
+}
+function viewRegister() {
+  const err = h('p', {class:'small', style:'color:var(--bad);min-height:1.2em', role:'alert'});
+  const note = h('p', {class:'small muted', id:'rgNote'});
+  const onUnit = e => { const k = e.target.value, u = UNITS.find(x => x[0] === k);
+    note.textContent = !u ? '' : u[2] === 'ALL' ? 'หน่วยงานนี้เห็นข้อมูลทั้งจังหวัด บัญชีจะใช้ได้หลังผู้ดูแลระบบอนุมัติ' : 'เห็นข้อมูลพื้นที่: ' + unitAreasLabel(k) + ' · ใช้งานได้ทันที'; };
+  const submit = async e => {
+    e.preventDefault(); err.textContent = '';
+    const v = id => $('#' + id).value.trim();
+    const p = {name:(v('rgPx') ? v('rgPx') : '') + v('rgF') + ' ' + v('rgL'), pos:v('rgPos'), area:$('#rgA').value, phone:v('rgT'), email:v('rgE'), username:v('rgU').toLowerCase(), password:$('#rgW').value};
+    if (!v('rgF') || !v('rgL')) return err.textContent = 'กรอกชื่อและนามสกุล';
+    if (!p.area) return err.textContent = 'เลือกหน่วยงาน';
+    const btn = e.currentTarget.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'กำลังลงทะเบียน…';
+    try { const r = await API('register', p);
+      if (r.pending) { S._lastUser = p.username; authGo('login'); toast('ลงทะเบียนแล้ว รอผู้ดูแลระบบเปิดใช้งาน จะมีอีเมลแจ้งเมื่อพร้อมใช้', 7000); return; }
+      await afterLogin(r); toast('ลงทะเบียนสำเร็จ ยินดีต้อนรับ', 3500);
+    } catch (x) { err.textContent = errText(x); btn.disabled = false; btn.textContent = 'ลงทะเบียนและเข้าสู่ระบบ'; }
+  };
+  return h('div', {class:'login'}, h('form', {class:'panel stack', onsubmit:submit, autocomplete:'on'},
+    h('div', null, h('div', {class:'eyebrow'}, 'ระบบ ตามตรวจ'), h('h1', null, 'ลงทะเบียนเจ้าหน้าที่'),
+      h('p', {class:'small muted'}, 'สำหรับเจ้าหน้าที่ สสจ. สสอ. และโรงพยาบาลในจังหวัดขอนแก่น กรอกเท่าที่จำเป็น ลงทะเบียนเสร็จเข้าใช้งานได้เลย')),
+    h('div', {class:'grid2'},
+      field('คำนำหน้า', h('select', {id:'rgPx'}, h('option', {value:''}, '— ไม่ระบุ —'), PREFIXES.map(x => h('option', {value:x}, x)))),
+      field('ชื่อ', h('input', {type:'text', id:'rgF', required:true, autocomplete:'given-name'})),
+      field('นามสกุล', h('input', {type:'text', id:'rgL', required:true, autocomplete:'family-name'})),
+      field('ตำแหน่ง', h('input', {type:'text', id:'rgPos', placeholder:'เช่น นักวิชาการสาธารณสุขชำนาญการ', autocomplete:'organization-title'})),
+      h('label', {class:'f', style:'grid-column:1/-1'}, h('span', null, 'หน่วยงาน'), unitSelect('rgA', '', onUnit), note),
+      field('เบอร์โทร', h('input', {type:'tel', id:'rgT', required:true, inputmode:'tel', autocomplete:'tel', placeholder:'08x-xxx-xxxx'})),
+      field('อีเมล (ใช้รับรหัสเมื่อลืมรหัสผ่าน)', h('input', {type:'email', id:'rgE', required:true, autocomplete:'email', autocapitalize:'none'}))),
+    h('div', {class:'divider'}),
+    h('div', {class:'grid2'},
+      field('ตั้งชื่อผู้ใช้ (a-z 0-9 . _ -)', h('input', {type:'text', id:'rgU', required:true, autocomplete:'username', autocapitalize:'none', spellcheck:'false', placeholder:'เช่น somchai.p', pattern:'[A-Za-z0-9._\\-]{3,40}', title:'ภาษาอังกฤษ ตัวเลข . _ - อย่างน้อย 3 ตัว'})),
+      field('ตั้งรหัสผ่าน (อย่างน้อย 8 ตัว)', pwInput('rgW', 'new-password'))),
+    err,
+    h('button', {class:'btn primary', type:'submit'}, 'ลงทะเบียนและเข้าสู่ระบบ'),
+    h('button', {class:'linkbtn', type:'button', style:'align-self:center', onclick: () => authGo('login')}, '← มีบัญชีแล้ว กลับไปเข้าสู่ระบบ')));
+}
+function viewForgot() {
+  const err = h('p', {class:'small', style:'color:var(--bad);min-height:1.2em', role:'alert'});
+  const st = S._fp || null;
+  const send = async e => {
+    e && e.preventDefault && e.preventDefault(); err.textContent = '';
+    const who = st ? st.username : $('#fpW').value.trim(); if (!who) return err.textContent = 'กรอกชื่อผู้ใช้หรืออีเมล';
+    const btn = e && e.currentTarget && e.currentTarget.querySelector ? e.currentTarget.querySelector('button[type=submit]') : null; if (btn) btn.disabled = true;
+    try { const r = await API('forgotPw', {who}); S._fp = r; render(); toast('ส่งรหัส 6 หลักไปที่ ' + r.email + ' แล้ว', 5000); }
+    catch (x) { err.textContent = errText(x); if (btn) btn.disabled = false; }
+  };
+  const reset = async e => {
+    e.preventDefault(); err.textContent = ''; const btn = e.currentTarget.querySelector('button[type=submit]'); btn.disabled = true;
+    try { const r = await API('resetPw', {username:st.username, code:$('#fpC').value, password:$('#fpN').value}); S._fp = null; await afterLogin(r); toast('ตั้งรหัสผ่านใหม่แล้ว', 3500); }
+    catch (x) { err.textContent = errText(x); btn.disabled = false; }
+  };
+  const back = h('button', {class:'linkbtn', type:'button', style:'align-self:center', onclick: () => { S._fp = null; authGo('login'); }}, '← กลับไปเข้าสู่ระบบ');
+  const head = h('div', null, h('div', {class:'eyebrow'}, 'ระบบ ตามตรวจ'), h('h1', null, 'ลืมรหัสผ่าน'));
+  if (!st) return h('div', {class:'login'}, h('form', {class:'panel stack', onsubmit:send}, head,
+    h('p', {class:'small muted'}, 'กรอกชื่อผู้ใช้หรืออีเมลที่ลงทะเบียนไว้ ระบบจะส่งรหัส 6 หลักไปทางอีเมล เพื่อใช้ตั้งรหัสผ่านใหม่'),
+    field('ชื่อผู้ใช้ หรือ อีเมล', h('input', {type:'text', id:'fpW', value:S._lastUser || '', autocomplete:'username', autocapitalize:'none', spellcheck:'false', required:true})),
+    err, h('button', {class:'btn primary', type:'submit'}, 'ส่งรหัสทางอีเมล'),
+    h('p', {class:'small muted'}, 'ถ้าบัญชีไม่มีอีเมล หรือไม่ได้รับอีเมล ติดต่อผู้ดูแลระบบ สสจ.ขอนแก่น ให้ตั้งรหัสผ่านใหม่ให้'), back));
+  return h('div', {class:'login'}, h('form', {class:'panel stack', onsubmit:reset}, head,
+    h('p', {class:'small'}, 'ส่งรหัส 6 หลักไปที่ ', h('b', null, st.email), ' แล้ว (ชื่อผู้ใช้ @' + st.username + ') ถ้าไม่เห็น ดูในกล่องจดหมายขยะ/โปรโมชัน รหัสใช้ได้ 15 นาที'),
+    field('รหัส 6 หลักจากอีเมล', h('input', {type:'text', id:'fpC', inputmode:'numeric', autocomplete:'one-time-code', maxlength:'6', required:true, style:'letter-spacing:.3em;font-size:1.2em'})),
+    field('รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)', pwInput('fpN', 'new-password')),
+    err, h('button', {class:'btn primary', type:'submit'}, 'ตั้งรหัสผ่านใหม่และเข้าสู่ระบบ'),
+    h('button', {class:'linkbtn', type:'button', style:'align-self:center', onclick: () => send({})}, 'ส่งรหัสอีกครั้ง'), back));
 }
 function accountDialog() {
   const err = h('p', {class:'small', style:'color:var(--bad)'});
@@ -879,8 +976,8 @@ function accountDialog() {
       h('button', {class:'btn sm', style:'align-self:flex-start', onclick: async () => { err.textContent = '';
         try { const r = await API('saveProfile', {phone:$('#pfT').value, email:$('#pfE').value}); S.user.phone = r.phone; S.user.email = r.email; toast('บันทึกข้อมูลติดต่อแล้ว'); } catch (e) { err.textContent = errText(e); } }}, 'บันทึกข้อมูลติดต่อ'),
       h('div', {class:'divider'}), h('h3', null, 'เปลี่ยนรหัสผ่าน'),
-      field('รหัสผ่านเดิม', h('input', {type:'password', id:'cpO', autocomplete:'current-password'})),
-      field('รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)', h('input', {type:'password', id:'cpN', autocomplete:'new-password'})), err,
+      field('รหัสผ่านเดิม', pwInput('cpO', 'current-password')),
+      field('รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)', pwInput('cpN', 'new-password')), err,
       h('div', {class:'row', style:'justify-content:space-between'},
         h('button', {class:'btn danger', onclick: () => { close(); logout(); }}, 'ออกจากระบบ'),
         h('div', {class:'row'}, h('button', {class:'btn', onclick:close}, 'ปิด'),
@@ -1884,7 +1981,8 @@ function itemCard(form, it) {
     h('div', {class:'spread'}, h('span', null, 'คำแนะนำการแก้ไข (แนบท้ายผลการตรวจ)'),
       h('button', {class:'btn ghost sm', type:'button', onclick: () => { write('res', base + '.r', it.rec, 150); syncItem(card); syncBound(card); }}, 'ใช้คำแนะนำมาตรฐาน')),
     bound('textarea', 'res', base + '.r', {id:'r_' + form + kk(it.k), rows:3}),
-    h('label', {class:'f', style:'max-width:220px'}, h('span', null, 'กำหนดแก้ไขภายใน (ถ้ามี)'), bound('date', 'res', base + '.due', {id:'d_' + form + kk(it.k)})));
+    h('label', {class:'f', style:'max-width:260px'}, h('span', null, 'กำหนดแก้ไขเร่งด่วนเฉพาะข้อนี้ (ถ้ามี)'), bound('date', 'res', base + '.due', {id:'d_' + form + kk(it.k)})),
+    h('p', {class:'small muted'}, 'ข้ออื่นใช้วันส่งหลักฐานรวมในแท็บ "สรุปผล"'));
   const photos = h('div', {class:'photos'});
   const cntB = h('b', null, '');
   const photoBtn = true ? h('label', {class:'tool photo-add'}, 'แนบรูป ', cntB,
@@ -2556,14 +2654,14 @@ function buildReport() {
   const att = h('div', {class:'rpt'}, rptHdr(i, 'เอกสารแนบท้าย'),
     h('h1', null, 'คำแนะนำในการปรับปรุงแก้ไขสถานที่ผลิตอาหาร'),
     h('p', {class:'center'}, i.pname || '', i.lic ? ' · เลขที่ ' + i.lic : '', ' · ตรวจเมื่อ ' + thDate(i.date, true)),
-    c.deficits.length ? h('table', null, h('thead', null, h('tr', null, h('th', null, 'ลำดับ'), h('th', null, 'ข้อ'), h('th', {style:'width:34%'}, 'ข้อบกพร่อง/สิ่งที่พบ'), h('th', {style:'width:40%'}, 'คำแนะนำของเจ้าหน้าที่'), h('th', null, 'กำหนดแก้ไข'))),
+    c.deficits.length ? (() => { const urgent = c.deficits.some(d => d.v.due);
+      return h('table', null, h('thead', null, h('tr', null, h('th', null, 'ลำดับ'), h('th', null, 'ข้อ'), h('th', {style: urgent ? 'width:34%' : 'width:40%'}, 'ข้อบกพร่อง/สิ่งที่พบ'), h('th', {style: urgent ? 'width:40%' : 'width:46%'}, 'คำแนะนำของเจ้าหน้าที่'), urgent ? h('th', null, 'กำหนดแก้ไขเร่งด่วน') : null)),
       h('tbody', null, c.deficits.map((d, n) => h('tr', {class:'avoid'}, h('td', {class:'c'}, n + 1), h('td', {class:'c'}, (d.form === 'ts2' ? 'ตส.2 ' : SPEC[d.form].short + ' ') + d.it.k + (d.it.m ? ' (M)' : '')),
         h('td', null, d.v.c || d.it.t, d.form === 'ts2' ? h('div', {class:'small'}, 'ผลประเมิน: ' + (d.v.s === 0 ? 'ปรับปรุง' : 'พอใช้')) : null), h('td', null, d.v.r || d.it.rec),
-        h('td', {class:'c'}, d.v.due ? thDate(d.v.due) : (sum.fuDate ? thDate(sum.fuDate) : '')))))) :
+        urgent ? h('td', {class:'c'}, d.v.due ? h('b', null, thDate(d.v.due)) : '') : null)))); })() :
       h('p', null, 'ไม่พบข้อบกพร่องที่ต้องปรับปรุงแก้ไข ขอให้รักษามาตรฐานการผลิตตามหลักเกณฑ์วิธีการที่ดีในการผลิตอาหารอย่างต่อเนื่อง'),
     sum.fuDate ? h('p', null, 'ขอให้ส่งหลักฐานการแก้ไข เช่น รูปถ่าย เอกสาร แบบฟอร์ม รายงาน ภายในวันที่ ', fill(thDate(sum.fuDate, true))) : null,
-    contactBox(i),
-    h('div', {class:'sigs two avoid', style:'margin-top:16px'}, h('div'), sigBox(sig['i' + (lead.k || '1')], lead.name, 'ผู้ให้คำแนะนำ' + (lead.pos ? ' · ' + lead.pos : ''))));
+    contactBox(i));
   parts.push(att);
   /* ---- photos ---- */
   const pics = [];
@@ -2613,7 +2711,20 @@ async function makePdf(btn, opts = {download:true}) {
       const firstRowTops = new Set(tables.map(t => t.hb));
       const cuts = [...new Set([...part.querySelectorAll('tr,p,h1,h2,.avoid,figure,.sigs,table,.hdrline')].map(e => rel(e).t))]
         .filter(v => v > 0 && !firstRowTops.has(v)).sort((a, b) => a - b);   // never leave a header alone at the bottom of a page
-      const canvas = await window.htmlToImage.toCanvas(part, {pixelRatio:R, backgroundColor:'#FFFFFF', fontEmbedCSS:fontCSS, cacheBust:false, width:718, height:H});
+      const left0 = part.getBoundingClientRect().left;
+      const pics = [...part.querySelectorAll('img')].filter(im => im.naturalWidth && im.naturalHeight).map(im => { const r = im.getBoundingClientRect();
+        return {im, x:r.left - left0, y:r.top - top0, w:r.width, h:r.height, fit:getComputedStyle(im).objectFit, bg:getComputedStyle(im).backgroundColor}; });
+      for (const o of pics) o.im.style.visibility = 'hidden';
+      let canvas;
+      try { canvas = await window.htmlToImage.toCanvas(part, {pixelRatio:R, backgroundColor:'#FFFFFF', fontEmbedCSS:fontCSS, cacheBust:false, width:718, height:H}); }
+      finally { for (const o of pics) o.im.style.visibility = ''; }
+      { const cx0 = canvas.getContext('2d');
+        for (const o of pics) {
+          if (o.bg && !/rgba\(0, 0, 0, 0\)|transparent/.test(o.bg)) { cx0.fillStyle = o.bg; cx0.fillRect(o.x * R, o.y * R, o.w * R, o.h * R); }
+          let dw = o.w, dh = o.h, dx = o.x, dy = o.y;
+          if (o.fit === 'contain' || o.fit === 'scale-down') { const sc = Math.min(o.w / o.im.naturalWidth, o.h / o.im.naturalHeight); dw = o.im.naturalWidth * sc; dh = o.im.naturalHeight * sc; dx = o.x + (o.w - dw) / 2; dy = o.y + (o.h - dh) / 2; }
+          try { cx0.drawImage(o.im, dx * R, dy * R, dw * R, dh * R); } catch (e) { console.warn('img draw', e); }
+        } }
       let y = 0;
       while (y < H - 2) {
         const cont = y > 0 ? tables.find(t => y >= t.hb && y < t.bottom - 2) : null;   // page starts inside a table body
@@ -2672,8 +2783,8 @@ function viewUsers() {
     try { const us = await API('users'); S._users = us;
       listBox.replaceChildren(...(us.length ? us.map(u => h('button', {class:'li', onclick: () => edit(u)},
         h('span', {class:'no'}, '@' + u.username), h('span', {class:'t'}, u.name || u.username),
-        h('span', {class:'end'}, u.role === 'admin' ? h('span', {class:'chip t-LC'}, 'ผู้ดูแลระบบ') : null, !u.active ? h('span', {class:'chip fail'}, 'ปิดใช้งาน') : null),
-        h('span', {class:'meta'}, h('span', null, u.unitName || unitName(u.unit || u.area)), u.pos ? h('span', null, u.pos) : null))) : [h('div', {class:'empty'}, 'ยังไม่มีผู้ใช้')]));
+        h('span', {class:'end'}, u.role === 'admin' ? h('span', {class:'chip t-LC'}, 'ผู้ดูแลระบบ') : null, u.via === 'self' ? h('span', {class:'chip'}, 'ลงทะเบียนเอง') : null, !u.active ? h('span', {class:'chip fail'}, u.via === 'self' ? 'รออนุมัติ' : 'ปิดใช้งาน') : null),
+        h('span', {class:'meta'}, h('span', null, u.unitName || unitName(u.unit || u.area)), u.pos ? h('span', null, u.pos) : null, u.phone ? h('span', null, '☎ ' + u.phone) : null))) : [h('div', {class:'empty'}, 'ยังไม่มีผู้ใช้')]));
     } catch (e) { listBox.replaceChildren(h('div', {class:'empty'}, errText(e))); }
   };
   const edit = u => {
@@ -2688,11 +2799,7 @@ function viewUsers() {
         field('เบอร์โทร', h('input', {type:'tel', id:'uT', value:u.phone || ''})),
         field('อีเมล', h('input', {type:'email', id:'uE', value:u.email || ''})),
         field('หน่วยงาน', (() => { const note = h('span', {class:'small muted', id:'uAnote'}, unitAreasLabel(u.unit || u.area) ? 'เข้าถึงพื้นที่: ' + unitAreasLabel(u.unit || u.area) : '');
-          const cur = u.unit || u.area, opt = ([k, l]) => h('option', {value:k, selected:cur === k}, l);
-          const s = h('select', {id:'uA', onchange: e => { note.textContent = e.target.value ? 'เข้าถึงพื้นที่: ' + unitAreasLabel(e.target.value) : ''; }}, h('option', {value:''}, '— เลือกหน่วยงาน —'),
-            h('optgroup', {label:'สสจ. และอำเภอเมือง'}, UNITS.filter(x => !/^[AH]-/.test(x[0])).map(opt)),
-            h('optgroup', {label:'สำนักงานสาธารณสุขอำเภอ'}, UNITS.filter(x => x[0].startsWith('A-')).map(opt)),
-            h('optgroup', {label:'โรงพยาบาลประจำอำเภอ'}, UNITS.filter(x => x[0].startsWith('H-')).map(opt)));
+          const s = unitSelect('uA', u.unit || u.area, e => { note.textContent = e.target.value ? 'เข้าถึงพื้นที่: ' + unitAreasLabel(e.target.value) : ''; });
           return h('div', {class:'stack', style:'gap:4px'}, s, note); })()),
         field('สิทธิ์', h('select', {id:'uR'}, h('option', {value:'area', selected:u.role !== 'admin'}, 'ผู้ตรวจ (เห็นตามพื้นที่ของหน่วยงาน)'), h('option', {value:'admin', selected:u.role === 'admin'}, 'ผู้ดูแลระบบ (เห็นทั้งจังหวัด + จัดการผู้ใช้)'))),
         field(isNew ? 'รหัสผ่านเริ่มต้น (อย่างน้อย 8 ตัว)' : 'ตั้งรหัสผ่านใหม่ (เว้นว่างถ้าไม่เปลี่ยน)', h('input', {type:'text', id:'uW', autocomplete:'off'}))),
@@ -2712,6 +2819,14 @@ function viewUsers() {
   return wrap;
 }
 
+/* keep dialogs inside the part of the screen the keyboard doesn't cover (LINE / Chrome on phones) */
+(function () {
+  const vv = window.visualViewport; if (!vv) return;
+  const set = () => { const r = document.documentElement.style; r.setProperty('--vvh', Math.round(vv.height) + 'px'); r.setProperty('--vvt', Math.round(vv.offsetTop) + 'px'); };
+  vv.addEventListener('resize', set); vv.addEventListener('scroll', set); set();
+  document.addEventListener('focusin', e => { const t = e.target; if (!t.closest || !t.closest('.dialog') || !/^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) return;
+    setTimeout(() => { try { t.scrollIntoView({block:'center', behavior:'smooth'}); } catch {} }, 300); });
+})();
 boot();
 
 </script>
