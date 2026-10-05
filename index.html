@@ -1323,7 +1323,7 @@ function viewPlace() {
 
 /* ============ new inspection ============ */
 function viewNew() {
-  const st = S._new = S._new && S._new.keep ? S._new : {keep:true, plan:!!S.prePlan, time:'', planNote:'', area: S.area === 'ALL' ? (allowedAreas().length === 1 ? allowedAreas()[0] : '') : S.area, pid:S.prePlace || null, q:'', addNew:false, g:'sv', date:S.prePlan ? (() => { const d = new Date(todayISO() + 'T00:00:00'); d.setDate(d.getDate() + 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })() : todayISO(), ts3:false, ts4:false, ts5:false};
+  const st = S._new = S._new && S._new.keep ? S._new : {keep:true, plan:!!S.prePlan, self:!isAdmin(), time:'', planNote:'', area: S.area === 'ALL' ? (allowedAreas().length === 1 ? allowedAreas()[0] : '') : S.area, pid:S.prePlace || null, q:'', addNew:false, g:'sv', date:S.prePlan ? (() => { const d = new Date(todayISO() + 'T00:00:00'); d.setDate(d.getDate() + 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })() : todayISO(), ts3:false, ts4:false, ts5:false};
   S.prePlace = null; S.prePlan = null;
   const wrap = h('div', {class:'stack'});
   const draw = () => keepVals(wrap, () => {
@@ -1354,6 +1354,10 @@ function viewNew() {
         h('div', {class:'chips', role:'radiogroup'}, [['lc','ตรวจขออนุญาต'],['sv','ตรวจเฝ้าระวัง'],['ot','ตรวจกรณีอื่น ๆ']].map(([v, l]) =>
           h('button', {role:'radio', 'aria-pressed':String(st.g === v), 'aria-checked':String(st.g === v), onclick: () => { st.g = v; draw(); }}, l))),
         h('p', {class:'small muted'}, 'เรื่องร้องเรียนหรือกรณีดำเนินคดี ให้ตรวจด้วยแบบกระดาษตามเดิม แล้วใช้ "บันทึกผลตรวจ (อัปโหลดไฟล์สแกน)" ในหน้าทะเบียนเพื่อเก็บเข้าฐานข้อมูลเดียวกัน')),
+      h('div', {class:'panel stack'}, h('h2', null, 'ผู้ตรวจ'),
+        h('label', {class:'check'}, h('input', {type:'checkbox', id:'npSelf', checked:st.self, oninput: e => st.self = e.target.checked}),
+          h('span', null, h('b', null, 'ฉันเป็นผู้ตรวจประเมินในครั้งนี้ด้วย'), ' · ใส่ชื่อฉันเป็นผู้ตรวจคนที่ 1 และเป็นผู้ประสานงาน')),
+        h('p', {class:'small muted'}, 'ถ้าไม่ติ๊ก (เช่น สร้างนัดให้ทีมจากคอมพิวเตอร์) ผู้ตรวจแต่ละคนจอยด้วย QR/รหัสเชิญ หรือพิมพ์ชื่อในแท็บ "ข้อมูลการตรวจ" ภายหลัง ส่วนคุณยังเปิดและแก้ไขรายการนี้ได้')),
       h('div', {class:'panel stack'}, h('h2', null, '3. แบบตรวจที่ใช้'),
         h('p', {class:'small'}, h('b', null, 'ตส.1 และ ตส.2 '), 'ใช้ทุกครั้ง · เลือกข้อกำหนดเฉพาะเพิ่มเมื่อสถานที่ผลิตอาหารกลุ่มนั้น'),
         ['ts3','ts4','ts5'].map(f => h('label', {class:'check'}, h('input', {type:'checkbox', id:'np' + f, checked:st[f], oninput: e => st[f] = e.target.checked}),
@@ -1364,7 +1368,7 @@ function viewNew() {
 }
 async function createInsp(st) {
   if (!st.area) return toast('เลือกพื้นที่ที่ตรวจก่อน');
-  const payload = {area:st.area, date:st.date || todayISO(), g:st.g, forms:{ts3:!!st.ts3, ts4:!!st.ts4, ts5:!!st.ts5}, plan:!!st.plan, time:st.time || '', planNote:st.planNote || ''};
+  const payload = {area:st.area, date:st.date || todayISO(), g:st.g, forms:{ts3:!!st.ts3, ts4:!!st.ts4, ts5:!!st.ts5}, selfInspector:!!st.self, plan:!!st.plan, time:st.time || '', planNote:st.planNote || ''};
   if (st.plan && st.date < todayISO()) return toast('วันนัดตรวจต้องเป็นวันนี้หรือวันถัดไป');
   if (st.addNew) { const o = readPlaceForm('np_'); if (!o.name) return toast('กรอกชื่อสถานที่ก่อน'); payload.newPlace = o; }
   else if (st.pid) payload.pid = st.pid; else return toast('เลือกสถานที่ที่จะตรวจก่อน');
@@ -1764,12 +1768,13 @@ function startFollowupDialog() {
     h('div', {class:'dialog stack', role:'dialog', 'aria-modal':'true'},
       h('h2', null, 'เริ่มตรวจติดตามครั้งที่ ' + round),
       h('p', {class:'small muted'}, 'ระบบสร้างรายการใหม่เลขที่ ' + i.no + '-F' + round + ' ที่เชื่อมกับการตรวจนี้ ดึงมาเฉพาะ ' + items.length + ' ข้อที่ยังต้องแก้ไข พร้อมผลเดิม คำแนะนำ และรูปเดิม เมื่อปิดการตรวจติดตาม ผลจะบันทึกกลับมาที่การตรวจครั้งแรกโดยไม่ต้องลงนามใหม่'),
-      field('วันที่ตรวจติดตาม', dateIn), h('div', {class:'eyebrow'}, 'วิธีตรวจติดตาม'), mode, err,
+      field('วันที่ตรวจติดตาม', dateIn), h('div', {class:'eyebrow'}, 'วิธีตรวจติดตาม'), mode,
+      h('label', {class:'check'}, h('input', {type:'checkbox', id:'fuSelf', checked:!isAdmin()}), h('span', null, 'ฉันเป็นผู้ตรวจติดตามในครั้งนี้ด้วย')), err,
       h('div', {class:'row', style:'justify-content:flex-end'}, h('button', {class:'btn', onclick:close}, 'ยกเลิก'), ok)));
   ok.onclick = async () => {
     ok.disabled = true; err.textContent = '';
     const m = sc.querySelector('input[name=fuMode]:checked').value;
-    try { const r = await API('startFollowup', {id:S.cur.id, mode:m, date:dateIn.value || todayISO(), items, base});
+    try { const r = await API('startFollowup', {id:S.cur.id, mode:m, date:dateIn.value || todayISO(), items, base, selfInspector:sc.querySelector('#fuSelf').checked});
       close(); if (m === 'onsite') S._inviteAfterOpen = r.id; openEditor(r.id); }
     catch (e) { err.textContent = errText(e); ok.disabled = false; }
   };
@@ -1804,10 +1809,19 @@ function contactPanel(i) {
 function insEditor(i) {
   const insRows = h('div', {class:'stack', style:'gap:8px'});
   const nShown = Math.max(6, ...Object.keys(i.ins || {}).filter(k => (i.ins[k].name || '').trim()).map(Number));
+  const clearIns = async k => {
+    const x = (S.cur.insp.ins || {})[k] || {}; if (!String(x.name || '').trim()) return;
+    if (!await confirmBox('เอา ' + x.name + ' ออกจากรายชื่อผู้ตรวจ?', 'ลายมือชื่อของคนนี้ (ถ้ามี) จะถูกลบด้วย', 'เอาออก', true)) return;
+    for (const f of ['name','pos','org','user']) write('insp', 'ins.' + k + '.' + f, '', 50);
+    if ((S.cur.sig || {})['i' + k]) write('sig', 'i' + k, null, 50);
+    syncBound(insRows); toast('เอาออกจากรายชื่อผู้ตรวจแล้ว');
+  };
   const drawIns = (n) => { insRows.replaceChildren(...Array.from({length:n}, (_, x) => h('div', {class:'grid2'},
     field('(' + (x + 1) + ') ชื่อ – สกุล', bound('text', 'insp', 'ins.' + (x + 1) + '.name', {id:'ins' + (x + 1) + 'n'})),
     field('ตำแหน่ง', bound('text', 'insp', 'ins.' + (x + 1) + '.pos', {id:'ins' + (x + 1) + 'p'})),
-    field('หน่วยงาน', bound('text', 'insp', 'ins.' + (x + 1) + '.org', {id:'ins' + (x + 1) + 'o', list:'orgList'})))),
+    h('div', {class:'row', style:'align-items:flex-end;gap:6px;flex-wrap:nowrap'},
+      h('div', {style:'flex:1;min-width:0'}, field('หน่วยงาน', bound('text', 'insp', 'ins.' + (x + 1) + '.org', {id:'ins' + (x + 1) + 'o', list:'orgList'}))),
+      h('button', {class:'btn sm ghost danger', type:'button', title:'เอาออกจากรายชื่อผู้ตรวจ', 'aria-label':'เอาผู้ตรวจคนที่ ' + (x + 1) + ' ออก', onclick: () => clearIns(String(x + 1))}, 'เอาออก')))),
     n < 20 ? h('button', {class:'btn sm', style:'align-self:flex-start', type:'button', onclick: () => { drawIns(n + 1); const el = $('#ins' + (n + 1) + 'n'); if (el) el.focus(); }}, '+ เพิ่มผู้ตรวจคนที่ ' + (n + 1)) : null,
     h('p', {class:'small muted'}, 'ผู้ตรวจทุกคนที่กรอกชื่อไว้ต้องลงนามในแท็บ "ลงนามและส่ง" ก่อนปิดการตรวจ')); };
   drawIns(Math.min(20, nShown));
