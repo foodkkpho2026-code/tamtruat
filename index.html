@@ -732,6 +732,7 @@ function boot() {
   ro.observe($('#bar'));
   bindGlobal();
   try { S.token = localStorage.getItem('gmp_token'); S._lastUser = localStorage.getItem('gmp_user') || ''; } catch {}
+  try { const q = new URLSearchParams(location.search); if (!IN_GAS && q.get('reg') && q.get('u') && q.get('t')) S.regDecide = {act:q.get('reg'), u:q.get('u'), t:q.get('t')}; } catch {}
   const onJ = j => { NAV.ready = true; if (!j) navSync(); if (j) { S.joinCode = String(j).toUpperCase(); if (S.user) doJoin(); else render(); } };
   try { if (IN_GAS && google.script.url) google.script.url.getLocation(loc => onJ(loc && loc.parameter && loc.parameter.j)); else onJ(new URLSearchParams(location.search).get('j')); } catch {}
   render();
@@ -909,7 +910,20 @@ function unitSelect(id, cur, onchange) {
 }
 function authGo(v, extra) { S.authView = v; Object.assign(S, extra || {}); render(); window.scrollTo(0, 0); }
 async function afterLogin(r) { NAV.key = ''; S.token = r.token; try { if (r.user && r.user.username) { localStorage.setItem('gmp_user', r.user.username); S._lastUser = r.user.username; } } catch {} try { localStorage.setItem('gmp_token', r.token); } catch {} S.authView = 'login'; await loadAll(); }
+function viewRegDecide() {
+  const d = S.regDecide, out = h('div', {class:'stack', style:'gap:8px'});
+  const run = async () => { btn.disabled = true; out.replaceChildren(h('p', {class:'small muted'}, 'กำลังบันทึก…'));
+    try { const r = await API('regDecide', d);
+      out.replaceChildren(h('div', {class:'note' + (r.done === 'approved' ? '' : ' warn')}, r.done === 'approved' ? (r.already ? 'บัญชีนี้อนุมัติไว้แล้ว' : '✓ อนุมัติบัญชี ' + (r.name || d.u) + ' แล้ว ระบบส่งอีเมลแจ้งผู้ลงทะเบียนให้แล้ว') : '✗ ไม่อนุมัติบัญชี ' + (r.name || d.u) + ' แล้ว'));
+      btn.hidden = true; }
+    catch (e) { out.replaceChildren(h('p', {class:'small', style:'color:var(--bad)'}, errText(e))); btn.disabled = false; } };
+  const btn = h('button', {class:'btn ' + (d.act === 'reject' ? 'danger' : 'primary'), onclick:run}, d.act === 'reject' ? 'ยืนยันไม่อนุมัติ' : 'ยืนยันอนุมัติ');
+  return h('div', {class:'login'}, h('div', {class:'panel stack'}, h('div', {class:'eyebrow'}, 'ระบบ ตามตรวจ · ผู้ดูแลระบบ'),
+    h('h1', null, d.act === 'reject' ? 'ไม่อนุมัติการลงทะเบียน' : 'อนุมัติการลงทะเบียน'), h('p', null, 'ชื่อผู้ใช้ ', h('b', null, '@' + d.u)), btn, out,
+    h('button', {class:'linkbtn', type:'button', style:'align-self:center', onclick: () => { S.regDecide = null; try { history.replaceState(null, '', location.pathname); } catch {} render(); }}, S.user ? 'กลับไปหน้าระบบ' : 'ไปหน้าเข้าสู่ระบบ')));
+}
 function viewLogin() {
+  if (S.regDecide) return viewRegDecide();
   if (S.authView === 'register') return viewRegister();
   if (S.authView === 'forgot') return viewForgot();
   const err = h('p', {class:'small', style:'color:var(--bad);min-height:1.2em', role:'alert'});
@@ -922,7 +936,7 @@ function viewLogin() {
     h('div', null, h('div', {class:'eyebrow'}, 'เข้าสู่ระบบ'), h('h1', null, 'ระบบ ตามตรวจ'), h('p', {class:'small muted'}, 'แบบตรวจ GMP ออนไลน์ และทะเบียนผลการตรวจสถานที่ผลิตอาหาร จ.ขอนแก่น')),
     S.joinCode ? h('div', {class:'note stack', style:'gap:8px'}, h('b', null, 'คุณได้รับเชิญร่วมตรวจ (รหัส ' + S.joinCode + ')'),
       h('span', {class:'small'}, 'เข้าสู่ระบบด้วยชื่อผู้ใช้ของคุณ ระบบจะพาเข้าร่วมการตรวจให้ทันที'),
-      h('span', {class:'small'}, 'ยังไม่มีบัญชี? ', h('button', {class:'linkbtn', type:'button', onclick: () => authGo('register')}, 'ลงทะเบียนเจ้าหน้าที่ใหม่'), ' ใช้เวลาไม่ถึง 1 นาที เสร็จแล้วเข้าร่วมได้เลย')) : null,
+      h('span', {class:'small'}, 'ยังไม่มีบัญชี? ', h('button', {class:'linkbtn', type:'button', onclick: () => authGo('register')}, 'ลงทะเบียนเจ้าหน้าที่ใหม่'), ' (รอผู้ดูแลระบบอนุมัติก่อนใช้งาน)')) : null,
     field('ชื่อผู้ใช้', h('input', {type:'text', id:'lgU', value:S._lastUser || '', autocomplete:'username', autocapitalize:'none', spellcheck:'false', required:true})),
     field('รหัสผ่าน', pwInput('lgP', 'current-password')),
     err, h('button', {class:'btn primary', type:'submit'}, 'เข้าสู่ระบบ'),
@@ -933,7 +947,7 @@ function viewRegister() {
   const err = h('p', {class:'small', style:'color:var(--bad);min-height:1.2em', role:'alert'});
   const note = h('p', {class:'small muted', id:'rgNote'});
   const onUnit = e => { const k = e.target.value, u = UNITS.find(x => x[0] === k);
-    note.textContent = !u ? '' : u[2] === 'ALL' ? 'หน่วยงานนี้เห็นข้อมูลทั้งจังหวัด บัญชีจะใช้ได้หลังผู้ดูแลระบบอนุมัติ' : 'เห็นข้อมูลพื้นที่: ' + unitAreasLabel(k) + ' · ใช้งานได้ทันที'; };
+    note.textContent = !u ? '' : 'เห็นข้อมูลพื้นที่: ' + unitAreasLabel(k); };
   const submit = async e => {
     e.preventDefault(); err.textContent = '';
     const v = id => $('#' + id).value.trim();
@@ -942,14 +956,14 @@ function viewRegister() {
     if (!p.area) return err.textContent = 'เลือกหน่วยงาน';
     const btn = e.currentTarget.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'กำลังลงทะเบียน…';
     try { const r = await API('register', p);
-      if (r.pending) { S._lastUser = p.username; authGo('login'); toast('ลงทะเบียนแล้ว รอผู้ดูแลระบบเปิดใช้งาน จะมีอีเมลแจ้งเมื่อพร้อมใช้', 7000); return; }
+      if (r.pending) { S._lastUser = p.username; authGo('login'); toast('ลงทะเบียนแล้ว รอผู้ดูแลระบบอนุมัติ จะมีอีเมลแจ้งเมื่อพร้อมใช้', 8000); return; }
       await afterLogin(r); toast('ลงทะเบียนสำเร็จ ยินดีต้อนรับ', 3500);
-    } catch (x) { err.textContent = errText(x); btn.disabled = false; btn.textContent = 'ลงทะเบียนและเข้าสู่ระบบ'; }
+    } catch (x) { err.textContent = errText(x); btn.disabled = false; btn.textContent = 'ลงทะเบียน'; }
   };
   return h('div', {class:'login'}, h('form', {class:'panel stack', onsubmit:submit, autocomplete:'on'},
     h('div', null, h('div', {class:'eyebrow'}, 'ระบบ ตามตรวจ'), h('h1', null, 'ลงทะเบียนเจ้าหน้าที่'),
-      h('p', {class:'small muted'}, 'สำหรับเจ้าหน้าที่ สสจ. สสอ. และโรงพยาบาลในจังหวัดขอนแก่น กรอกเท่าที่จำเป็น ลงทะเบียนเสร็จเข้าใช้งานได้เลย')),
-    S.joinCode ? h('div', {class:'note small'}, 'ลงทะเบียนเสร็จ ระบบจะพาเข้าร่วมการตรวจ (รหัส ' + S.joinCode + ') ให้ทันที') : null,
+      h('p', {class:'small muted'}, 'สำหรับเจ้าหน้าที่ สสจ. สสอ. และโรงพยาบาลในจังหวัดขอนแก่น กรอกเท่าที่จำเป็น ผู้ดูแลระบบจะอนุมัติแล้วแจ้งทางอีเมล')),
+    S.joinCode ? h('div', {class:'note small'}, 'หลังลงทะเบียน รอผู้ดูแลระบบอนุมัติ (มีอีเมลแจ้ง) แล้วเข้าสู่ระบบและสแกน QR อีกครั้ง (รหัส ' + S.joinCode + ')') : null,
     h('div', {class:'grid2'},
       field('คำนำหน้า', h('select', {id:'rgPx'}, h('option', {value:''}, '— ไม่ระบุ —'), PREFIXES.map(x => h('option', {value:x}, x)))),
       field('ชื่อ', h('input', {type:'text', id:'rgF', required:true, autocomplete:'given-name'})),
@@ -963,7 +977,7 @@ function viewRegister() {
       field('ตั้งชื่อผู้ใช้ (a-z 0-9 . _ -)', h('input', {type:'text', id:'rgU', required:true, autocomplete:'username', autocapitalize:'none', spellcheck:'false', placeholder:'เช่น somchai.p', pattern:'[A-Za-z0-9._\\-]{3,40}', title:'ภาษาอังกฤษ ตัวเลข . _ - อย่างน้อย 3 ตัว'})),
       field('ตั้งรหัสผ่าน (อย่างน้อย 8 ตัว)', pwInput('rgW', 'new-password'))),
     err,
-    h('button', {class:'btn primary', type:'submit'}, 'ลงทะเบียนและเข้าสู่ระบบ'),
+    h('button', {class:'btn primary', type:'submit'}, 'ลงทะเบียน'),
     h('button', {class:'linkbtn', type:'button', style:'align-self:center', onclick: () => authGo('login')}, '← มีบัญชีแล้ว กลับไปเข้าสู่ระบบ')));
 }
 function viewForgot() {
@@ -1034,7 +1048,7 @@ function go(view, extra) {
 }
 function render() {
   const nav = $('#nav'), m = $('#main');
-  if (!S.token || (!S.user && !S.loadErr && S.ready)) { nav.replaceChildren(); m.replaceChildren(viewLogin()); setSync(); navSync(); return; }
+  if (S.regDecide || !S.token || (!S.user && !S.loadErr && S.ready)) { nav.replaceChildren(); m.replaceChildren(viewLogin()); setSync(); navSync(); return; }
   if (!S.user) { nav.replaceChildren(); m.replaceChildren(S.loadErr ? h('div', {class:'panel stack', style:'max-width:460px'}, h('h2', null, 'โหลดข้อมูลไม่สำเร็จ'), h('p', null, S.loadErr),
       h('div', {class:'row'}, h('button', {class:'btn primary', onclick:loadAll}, 'ลองอีกครั้ง'), h('button', {class:'btn', onclick: () => logoutLocal(false)}, 'เข้าสู่ระบบใหม่'))) :
     h('p', {class:'muted'}, 'กำลังโหลดข้อมูล…')); setSync(); return; }
@@ -2996,7 +3010,7 @@ function viewUsers() {
     try { const us = await API('users'); S._users = us;
       listBox.replaceChildren(...(us.length ? us.map(u => h('button', {class:'li', onclick: () => edit(u)},
         h('span', {class:'no'}, '@' + u.username), h('span', {class:'t'}, u.name || u.username),
-        h('span', {class:'end'}, u.role === 'admin' ? h('span', {class:'chip t-LC'}, 'ผู้ดูแลระบบ') : null, u.via === 'self' ? h('span', {class:'chip'}, 'ลงทะเบียนเอง') : null, !u.active ? h('span', {class:'chip fail'}, u.via === 'self' ? 'รออนุมัติ' : 'ปิดใช้งาน') : null),
+        h('span', {class:'end'}, u.role === 'admin' ? h('span', {class:'chip t-LC'}, 'ผู้ดูแลระบบ') : null, /^(self|rejected)$/.test(u.via) ? h('span', {class:'chip'}, 'ลงทะเบียนเอง') : null, !u.active ? h('span', {class:'chip fail'}, u.via === 'self' ? 'รออนุมัติ' : u.via === 'rejected' ? 'ไม่อนุมัติ' : 'ปิดใช้งาน') : null),
         h('span', {class:'meta'}, h('span', null, u.unitName || unitName(u.unit || u.area)), u.pos ? h('span', null, u.pos) : null, u.phone ? h('span', null, '☎ ' + u.phone) : null))) : [h('div', {class:'empty'}, 'ยังไม่มีผู้ใช้')]));
     } catch (e) { listBox.replaceChildren(h('div', {class:'empty'}, errText(e))); }
   };
