@@ -271,6 +271,11 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums;whi
 .ins-row.drop{background:var(--accent-soft);outline:2px dashed var(--accent)}
 .ins-handle{flex:none;width:40px;height:44px;margin-top:22px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--muted);font-size:20px;cursor:grab;touch-action:none;user-select:none}
 .ins-handle:active{cursor:grabbing}
+.rules{margin:4px 0 0;padding:0;list-style:none;font-size:.82rem;color:var(--muted);display:flex;flex-direction:column;gap:2px}
+.rules li::before{content:"• ";}
+.rules li.ok{color:var(--good)}.rules li.ok::before{content:"✓ "}
+.rules li.bad{color:var(--bad)}.rules li.bad::before{content:"✗ "}
+.rules li.info::before{content:"ⓘ "}
 .pw-wrap{position:relative;display:flex}
 .pw-wrap input{flex:1;width:100%;padding-right:48px}
 .pw-eye{position:absolute;right:2px;top:50%;transform:translateY(-50%);width:44px;height:44px;display:grid;place-items:center;border:0;background:none;color:var(--muted);cursor:pointer;border-radius:8px}
@@ -314,6 +319,7 @@ table.t td.n,table.t th.n{text-align:right;font-variant-numeric:tabular-nums;whi
 .rpt .sigbox{text-align:center;font-size:12px}
 .rpt .sigbox .img{height:52px;display:flex;align-items:flex-end;justify-content:center;border-bottom:1px dotted #000000;margin-bottom:2px}
 .rpt .sigbox img{max-height:50px;max-width:100%}
+.rpt .validto{width:max-content;margin:2px 0 0 auto;border:1px solid #000;padding:1px 8px;font-size:12.5px}
 .rpt .photos{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 .rpt .photos figure{margin:0;border:1px solid #BBBBBB;padding:4px}
 .rpt .photos img{width:100%;height:230px;object-fit:contain;background:#F5F5F5;display:block}
@@ -943,6 +949,12 @@ function viewLogin() {
     h('div', {class:'spread'}, h('button', {class:'linkbtn', type:'button', onclick: () => authGo('forgot')}, 'ลืมรหัสผ่าน?'),
       h('button', {class:'linkbtn', type:'button', onclick: () => authGo('register')}, 'ลงทะเบียนเจ้าหน้าที่ใหม่'))));
 }
+function chkReg() {
+  const u = ($('#rgU') || {}).value || '', w = ($('#rgW') || {}).value || '';
+  const set = (id, r, ok, touched) => { const li = document.querySelector('#' + id + ' [data-r="' + r + '"]'); if (li) { li.classList.toggle('ok', touched && ok); li.classList.toggle('bad', touched && !ok); } };
+  set('rgUr', 'uchar', /^[A-Za-z0-9._-]*$/.test(u) && u.length > 0, u.length > 0); set('rgUr', 'ulen', u.length >= 3 && u.length <= 40, u.length > 0);
+  set('rgWr', 'plen', w.length >= 8, w.length > 0); set('rgWr', 'pmix', /[A-Za-z\u0E00-\u0E7F]/.test(w) && /\d/.test(w), w.length > 0);
+}
 function viewRegister() {
   const err = h('p', {class:'small', style:'color:var(--bad);min-height:1.2em', role:'alert'});
   const note = h('p', {class:'small muted', id:'rgNote'});
@@ -960,7 +972,7 @@ function viewRegister() {
       await afterLogin(r); toast('ลงทะเบียนสำเร็จ ยินดีต้อนรับ', 3500);
     } catch (x) { err.textContent = errText(x); btn.disabled = false; btn.textContent = 'ลงทะเบียน'; }
   };
-  return h('div', {class:'login'}, h('form', {class:'panel stack', onsubmit:submit, autocomplete:'on'},
+  return h('div', {class:'login'}, h('form', {class:'panel stack', onsubmit:submit, autocomplete:'on', oninput:chkReg},
     h('div', null, h('div', {class:'eyebrow'}, 'ระบบ ตามตรวจ'), h('h1', null, 'ลงทะเบียนเจ้าหน้าที่'),
       h('p', {class:'small muted'}, 'สำหรับเจ้าหน้าที่ สสจ. สสอ. และโรงพยาบาลในจังหวัดขอนแก่น กรอกเท่าที่จำเป็น ผู้ดูแลระบบจะอนุมัติแล้วแจ้งทางอีเมล')),
     S.joinCode ? h('div', {class:'note small'}, 'หลังลงทะเบียน รอผู้ดูแลระบบอนุมัติ (มีอีเมลแจ้ง) แล้วเข้าสู่ระบบและสแกน QR อีกครั้ง (รหัส ' + S.joinCode + ')') : null,
@@ -974,8 +986,10 @@ function viewRegister() {
       field('อีเมล (ใช้รับรหัสเมื่อลืมรหัสผ่าน)', h('input', {type:'email', id:'rgE', required:true, autocomplete:'email', autocapitalize:'none'}))),
     h('div', {class:'divider'}),
     h('div', {class:'grid2'},
-      field('ตั้งชื่อผู้ใช้ (a-z 0-9 . _ -)', h('input', {type:'text', id:'rgU', required:true, autocomplete:'username', autocapitalize:'none', spellcheck:'false', placeholder:'เช่น somchai.p', pattern:'[A-Za-z0-9._\\-]{3,40}', title:'ภาษาอังกฤษ ตัวเลข . _ - อย่างน้อย 3 ตัว'})),
-      field('ตั้งรหัสผ่าน (อย่างน้อย 8 ตัว)', pwInput('rgW', 'new-password'))),
+      h('label', {class:'f'}, h('span', null, 'ตั้งชื่อผู้ใช้'), h('input', {type:'text', id:'rgU', required:true, autocomplete:'username', autocapitalize:'none', spellcheck:'false', placeholder:'เช่น somchai.p หรือ phon01', pattern:'[A-Za-z0-9._\\-]{3,40}', title:'ภาษาอังกฤษ ตัวเลข . _ - ยาว 3–40 ตัว ไม่มีช่องว่าง'}),
+        h('ul', {class:'rules', id:'rgUr'}, h('li', {'data-r':'uchar'}, 'ใช้ได้เฉพาะ a–z, 0–9 และ . _ - (ไม่มีภาษาไทย ไม่มีช่องว่าง)'), h('li', {'data-r':'ulen'}, 'ยาว 3–40 ตัวอักษร'), h('li', {'class':'info'}, 'ตัวพิมพ์ใหญ่จะเปลี่ยนเป็นตัวเล็กให้อัตโนมัติ'))),
+      h('label', {class:'f'}, h('span', null, 'ตั้งรหัสผ่าน'), pwInput('rgW', 'new-password'),
+        h('ul', {class:'rules', id:'rgWr'}, h('li', {'data-r':'plen'}, 'อย่างน้อย 8 ตัวอักษร'), h('li', {'data-r':'pmix'}, 'แนะนำให้มีทั้งตัวอักษรและตัวเลข'), h('li', {'class':'info'}, 'กดรูปตาเพื่อดูรหัสที่พิมพ์ จดไว้ให้ดี ถ้าลืมกด "ลืมรหัสผ่าน" ได้')))),
     err,
     h('button', {class:'btn primary', type:'submit'}, 'ลงทะเบียน'),
     h('button', {class:'linkbtn', type:'button', style:'align-self:center', onclick: () => authGo('login')}, '← มีบัญชีแล้ว กลับไปเข้าสู่ระบบ')));
@@ -2545,7 +2559,7 @@ const STM_TXT = {
 function stmPrefill() {
   if (locked()) return; const i = S.cur.insp, st = S.cur.res.stm || {}, g = S.cur.res.sum || {};
   const set = (k, v) => { if (v && !String(st[k] || '').trim()) write('res', 'stm.' + k, v, 100); };
-  set('name', g.guide); set('role', g.guidePos); set('before', insList().map(x => x.name).join(', ')); set('time', i.time);
+  set('name', g.guide); set('role', g.guidePos); set('time', i.time);
   set('tel', i.phone); set('prov', 'ขอนแก่น'); set('nat', 'ไทย'); set('race', 'ไทย');
 }
 function tabStm() {
@@ -2557,7 +2571,8 @@ function tabStm() {
     h('div', {class:'panel stack'}, h('h2', null, 'ผู้ให้ถ้อยคำ'),
       h('div', {class:'grid2'}, f('คำให้การของ (ชื่อ – สกุล)', 'name'), f('เป็น (ฐานะของสถานที่ผลิต)', 'role', {placeholder:'เช่น ผู้ดำเนินกิจการ ผู้แทน'}),
         f('บัตรประชาชนเลขที่', 'idno', {inputmode:'numeric', maxlength:'17', autocomplete:'off'}), f('บัตรหมดอายุ', 'idexp', {placeholder:'เช่น 12 มี.ค. 2575'}),
-        f('อายุ (ปี)', 'age', {inputmode:'numeric'}), f('เชื้อชาติ', 'race'), f('สัญชาติ', 'nat'), f('ต่อหน้า (พนักงานเจ้าหน้าที่)', 'before'))),
+        f('อายุ (ปี)', 'age', {inputmode:'numeric'}), f('เชื้อชาติ', 'race'), f('สัญชาติ', 'nat'),
+        h('div', {class:'f', style:'grid-column:1/-1'}, h('span', null, 'ต่อหน้า (ดึงจากรายชื่อผู้ตรวจในแท็บ "ข้อมูลการตรวจ" อัตโนมัติ)'), h('div', {class:'note small', style:'margin:0'}, insList().map(x => x.name).join(', ') || 'ยังไม่มีชื่อผู้ตรวจ')))),
     h('div', {class:'panel stack'}, h('h2', null, 'ที่ตั้งสถานที่ผลิต'),
       h('p', {class:'small muted'}, (S.cur.insp.pname || '') + ' · ' + (S.cur.insp.addr || '')),
       h('div', {class:'grid2'}, f('เลขที่', 'no'), f('ตรอก/ซอย', 'soi'), f('ถนน', 'road'), f('หมู่ที่', 'moo'), f('ตำบล', 'tambon'), f('อำเภอ', 'amphoe'), f('จังหวัด', 'prov'), f('รหัสไปรษณีย์', 'zip', {inputmode:'numeric'}),
@@ -2574,16 +2589,18 @@ function buildStmPage(i) {
   const st = (S.cur.res && S.cur.res.stm) || {}, sig = S.cur.sig || {}, dd = String(i.date || '');
   const TH_M = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
   const d = dd ? new Date(dd + 'T00:00:00') : null;
-  const sgn = (s, name, role) => h('div', {class:'avoid', style:'text-align:center;margin-top:10px'},
-    h('div', null, 'ลงชื่อ ', s && s.img ? h('img', {src:s.img, alt:'', style:'height:44px;max-width:220px;object-fit:contain;vertical-align:bottom'}) : fill('', 200), ' ' + role),
-    h('div', null, '(', fill(name, 200), ')'));
-  return h('div', {class:'rpt'}, rptHdr(i, 'บันทึกคำให้การ'),
+  const sgn = (s, name, role) => h('div', {class:'avoid', style:'text-align:center;margin-top:10px;min-width:0'},
+    h('div', {style:'display:flex;align-items:flex-end;gap:4px;justify-content:center'}, h('span', null, 'ลงชื่อ'),
+      s && s.img ? h('img', {src:s.img, alt:'', style:'height:40px;width:150px;max-width:70%;object-fit:contain;border-bottom:1px dotted #000'}) : h('span', {style:'display:inline-block;width:150px;max-width:70%;border-bottom:1px dotted #000;height:30px'})),
+    h('div', null, '(', fill(name, 150), ')'), h('div', {class:'small'}, role));
+  const cols = insList().length > 6 ? 3 : 2;
+  return h('div', {class:'rpt', 'data-fit1':'1'}, rptHdr(i, 'บันทึกคำให้การ'),
     h('h1', null, 'บันทึกคำให้การ'),
     h('p', {style:'text-align:right'}, S.office || 'สำนักงานสาธารณสุขจังหวัดขอนแก่น'),
     h('p', {style:'text-align:right'}, 'วันที่ ', fill(d ? String(d.getDate()) : '', 30), ' เดือน ', fill(d ? TH_M[d.getMonth()] : '', 80), ' พ.ศ. ', fill(d ? String(d.getFullYear() + 543) : '', 50)),
     h('p', null, 'คำให้การของ ', fill(st.name, 220), ' บัตรประชาชนเลขที่ ', fill(st.idno, 130), ' หมดอายุ ', fill(st.idexp, 80)),
     h('p', null, 'เรื่อง การตรวจสถานที่ผลิตอาหารประกอบการขอใบอนุญาต/เลขประจำสถานที่ผลิต'),
-    h('p', null, 'ต่อหน้า ', fill(st.before, 480)),
+    h('p', null, 'ต่อหน้า ', fill(insList().map(x => x.name).join(', '), 480)),
     h('p', null, h('b', null, 'ข้อ 1'), ' ข้าพเจ้า ', fill(st.name, 200), ' อายุ ', fill(st.age, 30), ' ปี เชื้อชาติ ', fill(st.race, 50), ' สัญชาติ ', fill(st.nat, 50)),
     h('p', null, 'เป็น ', fill(st.role, 140), ' ของสถานที่ผลิตอาหาร ชื่อ ', fill(i.pname, 260)),
     h('p', null, 'ตั้งอยู่เลขที่ ', fill(st.no, 60), ' ตรอก/ซอย ', fill(st.soi, 90), ' ถนน ', fill(st.road, 90), ' หมู่ที่ ', fill(st.moo, 30)),
@@ -2593,8 +2610,8 @@ function buildStmPage(i) {
     h('p', {class:'ind'}, '2.1 ' + STM_TXT.c21(thDate(i.date, true))),
     h('p', {class:'ind'}, '2.2 ' + STM_TXT.c22), h('p', {class:'ind'}, '2.3 ' + STM_TXT.c23),
     h('p', {class:'ind'}, h('b', null, 'ข้อ 3'), ' ' + STM_TXT.c3), h('p', {class:'ind'}, h('b', null, 'ข้อ 4'), ' ' + STM_TXT.c4),
-    sgn(sig.st, st.name, 'ผู้ให้ถ้อยคำ'),
-    insList().map(x => sgn(sig['i' + x.k], x.name, 'พนักงานเจ้าหน้าที่')));
+    h('div', {style:'display:grid;grid-template-columns:1fr 1fr;column-gap:16px'}, sgn(sig.st, st.name, 'ผู้ให้ถ้อยคำ'), h('div')),
+    h('div', {style:'display:grid;grid-template-columns:repeat(' + cols + ',1fr);column-gap:12px'}, insList().map(x => sgn(sig['i' + x.k], x.name, 'พนักงานเจ้าหน้าที่'))));
 }
 function tabSign() {
   const i = S.cur.insp;
@@ -2707,6 +2724,8 @@ const JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.
 const XLSX_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 const cb = on => h('span', {class:'cb' + (on ? ' on' : '')});
 const fill = (v, min) => h('span', {class:'fill', style: min ? 'display:inline-block;min-width:' + min + 'px' : null}, v || ' ');
+/* result valid for one year from the inspection date (6 ต.ค. 2569 → 6 ต.ค. 2570; 29 ก.พ. → 28 ก.พ.) */
+function validUntil(d) { const [y, m, dd] = String(d).split('-').map(Number); const last = new Date(Date.UTC(y + 1, m, 0)).getUTCDate(); return (y + 1) + '-' + String(m).padStart(2, '0') + '-' + String(Math.min(dd, last)).padStart(2, '0'); }
 function rptHdr(i, form) { return h('div', {class:'hdrline'}, h('span', null, 'เลขที่ตรวจ ' + (i.no || i.id) + ' · ' + areaName(i.area)), h('span', null, form)); }
 function contactBox(i) {
   const c = i.contact || {}; if (!String(c.name || c.phone || c.email || '').trim()) return null;
@@ -2775,6 +2794,7 @@ function buildReport() {
   /* ---- ตส.1 ---- */
   const p1 = h('div', {class:'rpt'},
     h('div', {class:'formno'}, 'ตส.1 (63)'),
+    i.date ? h('div', {class:'validto'}, 'ใช้ได้ถึงวันที่ ', h('b', null, thDate(validUntil(i.date), true))) : null,
     h('h1', null, 'แบบสรุปผลการตรวจประเมินสถานที่ผลิตอาหาร (Audit report)'),
     h('p', {class:'center'}, 'วันที่ ', fill(thDate(i.date, true), 150), ' เวลา ', fill(i.time, 60), ' น.  เลขที่ตรวจ ', fill(i.no || i.id), '  หน่วยตรวจ ', fill(areaName(i.area))), edNote(i),
     h('h2', null, '1. ข้อมูลผู้ตรวจประเมิน'),
@@ -2951,6 +2971,13 @@ async function makePdf(btn, opts = {download:true}) {
           if (o.fit === 'contain' || o.fit === 'scale-down') { const sc = Math.min(o.w / o.im.naturalWidth, o.h / o.im.naturalHeight); dw = o.im.naturalWidth * sc; dh = o.im.naturalHeight * sc; dx = o.x + (o.w - dw) / 2; dy = o.y + (o.h - dh) / 2; }
           try { cx0.drawImage(o.im, dx * R, dy * R, dw * R, dh * R); } catch (e) { console.warn('img draw', e); }
         } }
+      // a part that must stay on one page (บันทึกคำให้การ): shrink it to fit instead of splitting
+      if (part.dataset.fit1) {
+        if (!first) pdf.addPage(); first = false;
+        const sc = Math.min(1, pageH / H), w = CW * sc, hmm = H / pxPerMm * sc;
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', MX + (CW - w) / 2, MT, w, hmm);
+        continue;
+      }
       let y = 0;
       while (y < H - 2) {
         const cont = y > 0 ? tables.find(t => y >= t.hb && y < t.bottom - 2) : null;   // page starts inside a table body
